@@ -49,15 +49,16 @@ router.get('/', async (req, res) => {
 // @route   POST /api/ads
 router.post('/', async (req, res) => {
   try {
-    const { title, subtitle, actionText, imagePath, userRole } = req.body;
+    const { title, subtitle, actionText, imagePath, userRole, type } = req.body;
 
     // التحقق من الصلاحيات
     if (userRole !== 'owner' && userRole !== 'admin') {
       return res.status(403).json({ success: false, message: 'غير مصرح لك بإدارة الإعلانات. المالك والمدير فقط!' });
     }
 
-    if (!title || !imagePath) {
-      return res.status(400).json({ success: false, message: 'الرجاء إدخال عنوان الإعلان ورابط الصورة أو رفعها' });
+    const isBanner = (!type || type === 'banner');
+    if (!title || (isBanner && !imagePath)) {
+      return res.status(400).json({ success: false, message: 'الرجاء إدخال عنوان الإعلان. وللإعلانات الرئيسية يجب إرفاق صورة.' });
     }
 
     // حفظ الصورة إذا كانت base64
@@ -68,6 +69,7 @@ router.post('/', async (req, res) => {
       subtitle,
       actionText: actionText || 'اطلب الآن',
       imagePath: resolvedImagePath,
+      type: type || 'banner',
     });
 
     await ad.save();
@@ -86,7 +88,7 @@ router.post('/', async (req, res) => {
 // @route   PUT /api/ads/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { title, subtitle, actionText, imagePath, userRole } = req.body;
+    const { title, subtitle, actionText, imagePath, userRole, type } = req.body;
 
     // التحقق من الصلاحيات
     if (userRole !== 'owner' && userRole !== 'admin') {
@@ -101,6 +103,7 @@ router.put('/:id', async (req, res) => {
     if (title) ad.title = title;
     if (subtitle !== undefined) ad.subtitle = subtitle;
     if (actionText !== undefined) ad.actionText = actionText;
+    if (type) ad.type = type;
     if (imagePath) {
       ad.imagePath = saveBase64Image(imagePath, req);
     }

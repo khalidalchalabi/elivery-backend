@@ -16,9 +16,14 @@ const AdSchema = new mongoose.Schema(
       trim: true,
       default: 'اطلب الآن',
     },
+    type: {
+      type: String,
+      enum: ['banner', 'notification'],
+      default: 'banner',
+    },
     imagePath: {
       type: String, // رابط الصورة الخلفية للإعلان
-      required: [true, 'الرجاء إدخال رابط الصورة الخلفية للإعلان'],
+      required: false, // لم يعد إلزامياً لأن الإشعارات قد لا تحتوي على صورة
     },
   },
   {
