@@ -501,4 +501,76 @@ router.put('/users/:id/update-profile', async (req, res) => {
   }
 });
 
+// @desc    طلب استعادة كلمة المرور
+// @route   POST /api/auth/customer/forgot-password
+router.post('/customer/forgot-password', async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'الرجاء إدخال رقم الهاتف' });
+    }
+
+    const user = await User.findOne({ phone, role: 'customer' });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'رقم الهاتف هذا غير مسجل لدينا' });
+    }
+
+    // توليد كود من 4 أرقام
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    
+    user.otpCode = otp;
+    user.otpExpires = Date.now() + 10 * 60 * 1000; // صالح لمدة 10 دقائق
+    await user.save();
+
+    // في البيئة الحقيقية نقوم بإرسال SMS هنا
+    // حالياً سنعيد الكود في الاستجابة للتجربة فقط
+    res.status(200).json({
+      success: true,
+      message: 'تم إرسال كود الاستعادة بنجاح',
+      data: { otp }, // للعرض في واجهة التطبيق حالياً لغياب الـ SMS
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    التحقق من الكود وتغيير كلمة المرور
+// @route   POST /api/auth/customer/reset-password
+router.post('/customer/reset-password', async (req, res) => {
+  try {
+    const { phone, otp, newPassword } = req.body;
+
+    if (!phone || !otp || !newPassword) {
+      return res.status(400).json({ success: false, message: 'الرجاء إدخال الهاتف والكود وكلمة المرور الجديدة' });
+    }
+
+    const user = await User.findOne({ phone, role: 'customer' });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    if (user.otpCode !== otp) {
+      return res.status(400).json({ success: false, message: 'كود التحقق غير صحيح' });
+    }
+
+    if (user.otpExpires < Date.now()) {
+      return res.status(400).json({ success: false, message: 'انتهت صلاحية الكود، الرجاء طلب كود جديد' });
+    }
+
+    // تغيير كلمة المرور وتصفير الكود
+    user.password = newPassword;
+    user.otpCode = null;
+    user.otpExpires = null;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تغيير كلمة المرور بنجاح، يمكنك الآن تسجيل الدخول',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
