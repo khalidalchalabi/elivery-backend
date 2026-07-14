@@ -21,7 +21,8 @@ router.post('/customer/register', async (req, res) => {
       name,
       phone,
       password,
-      role: 'customer'
+      role: 'customer',
+      email: `customer_${phone}_${Date.now()}@local.com` // بريد وهمي لتفادي مشكلة تكرار الإيميل الفارغ في قاعدة البيانات
     });
 
     await user.save();
