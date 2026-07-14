@@ -5,33 +5,10 @@ const Product = require('../models/Product');
 const fs = require('fs');
 const path = require('path');
 
-// دالة مساعدة لحفظ الصورة المرفوعة كـ base64 كملف محلي
 function saveBase64Image(base64Str, req) {
-  if (!base64Str || !base64Str.startsWith('data:image/')) {
-    return base64Str; // إرجاع الرابط كما هو إذا كان رابطاً أو إيموجي
-  }
-
-  const matches = base64Str.match(/^data:image\/([A-Za-z0-9+-]+);base64,([\s\S]+)$/);
-  if (!matches || matches.length !== 3) {
-    return base64Str;
-  }
-
-  const ext = matches[1];
-  const data = matches[2];
-  const buffer = Buffer.from(data, 'base64');
-
-  // التأكد من وجود مجلد الرفع
-  const dir = path.join(__dirname, '../public/uploads');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  const filename = `img_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
-  const filePath = path.join(dir, filename);
-  fs.writeFileSync(filePath, buffer);
-
-  const host = req.headers.host;
-  return `${req.protocol}://${host}/uploads/${filename}`;
+  // للعمل على سيرفرات مجانية مثل Vercel، سنحفظ الصورة كنص Base64 مباشرة في قاعدة البيانات
+  // بدلاً من حفظها كملف فعلي لتجنب مشاكل الصلاحيات (Read-only filesystem)
+  return base64Str;
 }
 
 // @desc    جلب كافة المحلات من قاعدة البيانات
