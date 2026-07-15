@@ -30,7 +30,7 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['customer', 'driver', 'admin', 'owner', 'accountant', 'merchant'],
+      enum: ['customer', 'driver', 'admin', 'owner', 'accountant', 'merchant', 'support'],
       default: 'customer',
     },
     shop: {
@@ -41,6 +41,10 @@ const UserSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    profilePicture: {
+      type: String,
+      default: null,
     },
     // تفاصيل إضافية خاصة بالسائقين فقط
     driverDetails: {
@@ -92,6 +96,7 @@ const UserSchema = new mongoose.Schema(
         address: { type: String, required: true },
         latitude: { type: Number, required: true },
         longitude: { type: Number, required: true },
+        region: { type: String, default: 'inside_khalis' }
       }
     ],
   },

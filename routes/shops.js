@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
 // @route   POST /api/shops
 router.post('/', async (req, res) => {
   try {
-    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories } = req.body;
+    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude } = req.body;
 
     let shopExists = await Shop.findOne({ name });
     if (shopExists) {
@@ -47,6 +47,14 @@ router.post('/', async (req, res) => {
     }
 
     const resolvedImagePath = saveBase64Image(imagePath, req);
+
+    let location = undefined;
+    if (latitude !== undefined && longitude !== undefined) {
+      location = {
+        type: 'Point',
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      };
+    }
 
     const shop = new Shop({
       name,
@@ -56,6 +64,7 @@ router.post('/', async (req, res) => {
       deliveryTime,
       deliveryFee,
       categories,
+      ...(location && { location })
     });
 
     await shop.save();
@@ -90,7 +99,7 @@ router.delete('/:id', async (req, res) => {
 // @route   PUT /api/shops/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, imagePath, deliveryFee, deliveryTime, categories } = req.body;
+    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude } = req.body;
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
@@ -102,6 +111,13 @@ router.put('/:id', async (req, res) => {
     if (deliveryFee !== undefined) shop.deliveryFee = deliveryFee;
     if (deliveryTime) shop.deliveryTime = deliveryTime;
     if (categories) shop.categories = categories;
+
+    if (latitude !== undefined && longitude !== undefined) {
+      shop.location = {
+        type: 'Point',
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      };
+    }
 
     await shop.save();
     res.status(200).json({ success: true, message: 'تم تحديث بيانات المحل بنجاح', data: shop });

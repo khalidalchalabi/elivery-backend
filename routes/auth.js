@@ -214,9 +214,9 @@ router.post('/employee', async (req, res) => {
   try {
     const { name, email, password, phone, role, driverDetails, shopId } = req.body;
 
-    const allowedRoles = ['driver', 'admin', 'owner', 'accountant', 'merchant'];
+    const allowedRoles = ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'];
     if (!allowedRoles.includes(role)) {
-      return res.status(400).json({ success: false, message: 'دور الموظف غير صالح. يجب أن يكون سائق، مسؤول، مالك، محاسب أو صاحب متجر' });
+      return res.status(400).json({ success: false, message: 'دور الموظف غير صالح. يجب أن يكون سائق، مسؤول، مالك، محاسب، موظف دعم أو صاحب متجر' });
     }
 
     let userExists = await User.findOne({ email });
@@ -267,7 +267,7 @@ router.delete('/employee/:id', async (req, res) => {
 // @route   GET /api/auth/employees
 router.get('/employees', async (req, res) => {
   try {
-    const employees = await User.find({ role: { $in: ['driver', 'admin', 'owner', 'accountant', 'merchant'] } }).populate('shop', 'name').sort({ createdAt: -1 });
+    const employees = await User.find({ role: { $in: ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'] } }).populate('shop', 'name').sort({ createdAt: -1 });
     res.status(200).json({ success: true, count: employees.length, data: employees });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -386,7 +386,7 @@ router.get('/users/:id/addresses', async (req, res) => {
 // @route   POST /api/auth/users/:id/addresses
 router.post('/users/:id/addresses', async (req, res) => {
   try {
-    const { label, address, latitude, longitude } = req.body;
+    const { label, address, latitude, longitude, region } = req.body;
 
     if (!label || !address || latitude === undefined || longitude === undefined) {
       return res.status(400).json({ success: false, message: 'بيانات العنوان غير كاملة' });
@@ -397,7 +397,13 @@ router.post('/users/:id/addresses', async (req, res) => {
       return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
     }
 
-    user.savedAddresses.push({ label, address, latitude, longitude });
+    user.savedAddresses.push({ 
+      label, 
+      address, 
+      latitude, 
+      longitude,
+      region: region || 'inside_khalis'
+    });
     await user.save();
 
     res.status(200).json({
@@ -568,6 +574,45 @@ router.post('/customer/reset-password', async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'تم تغيير كلمة المرور بنجاح، يمكنك الآن تسجيل الدخول',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    تحديث صورة الملف الشخصي للمستخدم
+// @route   PUT /api/auth/profile-picture
+router.put('/profile-picture', async (req, res) => {
+  try {
+    const { userId, base64Image } = req.body;
+
+    if (!userId || !base64Image) {
+      return res.status(400).json({ success: false, message: 'الرجاء توفير معرف المستخدم والصورة' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    let imageUrl = base64Image;
+
+    // حفظ الصورة مباشرة في قاعدة البيانات لأن Vercel لا يدعم رفع الملفات محلياً
+    if (base64Image.startsWith('data:image/')) {
+      imageUrl = base64Image;
+    }
+
+    user.profilePicture = imageUrl;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث صورة الملف الشخصي بنجاح',
+      data: {
+        profilePicture: imageUrl
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

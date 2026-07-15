@@ -26,6 +26,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/shops', require('./routes/shops'));
 app.use('/api/ads', require('./routes/ads'));
+app.use('/api/messages', require('./routes/messages'));
 
 // اختبار تشغيل الخادم
 app.get('/', (req, res) => {
