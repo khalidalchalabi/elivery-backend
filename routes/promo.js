@@ -6,7 +6,7 @@ const PromoCode = require('../models/PromoCode');
 // @route   POST /api/promo/apply
 router.post('/apply', async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, userId } = req.body;
     if (!code) {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال كود الخصم' });
     }
@@ -25,6 +25,12 @@ router.post('/apply', async (req, res) => {
       return res.status(400).json({ success: false, message: 'كود الخصم منتهي الصلاحية' });
     }
 
+    if (promo.assignedTo) {
+      if (!userId || promo.assignedTo.toString() !== userId) {
+        return res.status(400).json({ success: false, message: 'هذا الكود غير مخصص لحسابك' });
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -33,6 +39,28 @@ router.post('/apply', async (req, res) => {
       }
     });
 
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب الخصومات المتاحة للمستخدم (العامة والمخصصة له)
+// @route   GET /api/promo/my-promos/:userId
+router.get('/my-promos/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    // جلب الأكواد الفعالة وغير المنتهية
+    const promos = await PromoCode.find({
+      isActive: true,
+      expirationDate: { $gt: new Date() },
+      $or: [
+        { assignedTo: null },
+        { assignedTo: userId }
+      ]
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, data: promos });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
