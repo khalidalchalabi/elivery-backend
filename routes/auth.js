@@ -150,6 +150,10 @@ router.put('/driver/location/:id', async (req, res) => {
     }
 
     // تحديث الموقع الجغرافي والتوفر
+    if (!user.driverDetails) {
+      user.driverDetails = {};
+    }
+
     if (longitude && latitude) {
       user.driverDetails.currentLocation = {
         type: 'Point',
