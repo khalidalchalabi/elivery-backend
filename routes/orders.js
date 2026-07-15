@@ -47,6 +47,8 @@ router.post('/', async (req, res) => {
       dropoffLng,
       itemsPrice,
       deliveryFee,
+      promoCode,
+      discountAmount,
       paymentMethod,
       replacementPreference,
       scheduledFor,
@@ -69,6 +71,10 @@ router.post('/', async (req, res) => {
       }
     }
 
+    if (!customerId || !pickupAddress || !dropoffAddress || itemsPrice === undefined || deliveryFee === undefined) {
+      return res.status(400).json({ success: false, message: 'الرجاء توفير جميع بيانات الطلب الأساسية' });
+    }
+
     let finalShopId = shopId;
     if (!finalShopId && items && items.length > 0 && items[0].product) {
       const Product = require('../models/Product');
@@ -81,16 +87,17 @@ router.post('/', async (req, res) => {
     // التحقق من صحة العميل
     let customer = await User.findById(customerId);
     if (!customer) {
-      // البحث عن أول عميل مسجل في قاعدة البيانات كخيار بديل لتسهيل التجربة
       customer = await User.findOne({ role: 'customer' });
     }
     if (!customer) {
       return res.status(404).json({ success: false, message: 'العميل غير موجود' });
     }
-    // تحديث المعرف الفعلي للعميل بعد التحقق
     const finalCustomerId = customer._id;
 
-    const totalPrice = parseFloat(itemsPrice) + parseFloat(deliveryFee);
+    const discount = discountAmount || 0;
+    const itemsPriceNum = parseFloat(itemsPrice);
+    const deliveryFeeNum = parseFloat(deliveryFee);
+    const totalPrice = itemsPriceNum + deliveryFeeNum - discount;
 
     // إنشاء الطلب بالاحداثيات الجغرافية
     const order = new Order({
@@ -109,10 +116,13 @@ router.post('/', async (req, res) => {
       paymentMethod,
       replacementPreference: replacementPreference || 'call_me',
       scheduledFor: scheduledFor || null,
+      totalPaid: totalPrice,
+      promoCode: promoCode || null,
+      discountAmount: discount,
       priceDetails: {
-        itemsPrice,
-        deliveryFee,
-        totalPrice,
+        itemsPrice: itemsPriceNum,
+        deliveryFee: deliveryFeeNum,
+        totalPrice: totalPrice,
       },
       shop: finalShopId || null,
     });
