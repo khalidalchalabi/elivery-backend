@@ -173,6 +173,17 @@ router.put('/driver/location/:id', async (req, res) => {
   }
 });
 
+// @desc    جلب جميع السائقين
+// @route   GET /api/auth/drivers
+router.get('/drivers', async (req, res) => {
+  try {
+    const drivers = await User.find({ role: 'driver' }).select('-password');
+    res.json({ success: true, data: drivers });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    جلب جميع السائقين المتاحين والقريبين من إحداثيات معينة
 // @route   GET /api/auth/drivers/nearby
 router.get('/drivers/nearby', async (req, res) => {
