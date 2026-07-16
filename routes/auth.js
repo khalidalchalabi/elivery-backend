@@ -70,6 +70,27 @@ router.post('/customer/login', async (req, res) => {
   }
 });
 
+// @desc    حذف حساب الزبون
+// @route   DELETE /api/auth/customer/:id
+router.delete('/customer/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    if (user.role !== 'customer') {
+      return res.status(403).json({ success: false, message: 'هذا الحساب ليس حساب زبون' });
+    }
+
+    await user.deleteOne();
+
+    res.status(200).json({ success: true, message: 'تم حذف الحساب بنجاح' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    إنشاء مستخدم جديد (زبون، سائق، مسؤول)
 // @route   POST /api/auth/register
 router.post('/register', async (req, res) => {
