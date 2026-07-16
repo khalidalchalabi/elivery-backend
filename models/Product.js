@@ -33,6 +33,10 @@ const ProductSchema = new mongoose.Schema(
       type: Number,
       default: 4.5,
     },
+    isAvailable: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
