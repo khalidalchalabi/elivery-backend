@@ -21,6 +21,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // خدمة الملفات المرفوعة بشكل استاتيكي
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
+// تقديم موقع الكادر (Flutter Web) من المجلد الرئيسي
+app.use(express.static(path.join(__dirname, 'public/web')));
+
 // المسارات (Routes)
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/orders', require('./routes/orders'));
