@@ -99,7 +99,7 @@ router.delete('/:id', async (req, res) => {
 // @route   PUT /api/shops/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude } = req.body;
+    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen } = req.body;
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
@@ -111,6 +111,7 @@ router.put('/:id', async (req, res) => {
     if (deliveryFee !== undefined) shop.deliveryFee = deliveryFee;
     if (deliveryTime) shop.deliveryTime = deliveryTime;
     if (categories) shop.categories = categories;
+    if (isOpen !== undefined) shop.isOpen = isOpen;
 
     if (latitude !== undefined && longitude !== undefined) {
       shop.location = {

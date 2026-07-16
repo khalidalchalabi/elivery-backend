@@ -212,21 +212,30 @@ router.get('/:id', async (req, res) => {
 router.put('/:id/accept', async (req, res) => {
   try {
     const { driverId } = req.body;
+    console.log('Accepting order:', req.params.id, 'by driver:', driverId);
 
     // التحقق من صحة السائق
     const driver = await User.findById(driverId);
     if (!driver || driver.role !== 'driver') {
+      console.log('Driver not found or not driver role');
       return res.status(404).json({ success: false, message: 'السائق غير موجود' });
     }
 
     // البحث عن الطلب وتحديثه
     const order = await Order.findById(req.params.id);
     if (!order) {
+      console.log('Order not found');
       return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
     }
 
-    if (order.status !== 'pending') {
+    if (!['pending', 'preparing', 'ready'].includes(order.status)) {
+      console.log('Order status is invalid:', order.status);
       return res.status(400).json({ success: false, message: 'هذا الطلب تم قبوله بالفعل أو ملغى' });
+    }
+
+    if (order.driver) {
+      console.log('Order already has a driver assigned:', order.driver);
+      return res.status(400).json({ success: false, message: 'تم استلام هذا الطلب من قبل سائق آخر' });
     }
 
     order.driver = driverId;

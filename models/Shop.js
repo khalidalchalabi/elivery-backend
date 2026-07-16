@@ -43,6 +43,10 @@ const ShopSchema = new mongoose.Schema(
         default: [44.5241, 33.8245], // مركز الخالص الافتراضي
       },
     },
+    isOpen: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
