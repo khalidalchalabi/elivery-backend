@@ -37,13 +37,17 @@ router.post('/', async (req, res) => {
 router.get('/:driverId', async (req, res) => {
   try {
     const { driverId } = req.params;
+    const { role } = req.query;
 
     const messages = await Message.find({ driver: driverId }).sort({ createdAt: 1 });
 
-    await Message.updateMany(
-      { driver: driverId, isRead: false },
-      { $set: { isRead: true } }
-    );
+    let updateQuery = { driver: driverId, isRead: false };
+    if (role === 'support') {
+      updateQuery.senderRole = { $ne: 'support' };
+    } else {
+      updateQuery.senderRole = 'support';
+    }
+    await Message.updateMany(updateQuery, { $set: { isRead: true } });
 
     res.status(200).json({
       success: true,
@@ -55,17 +59,55 @@ router.get('/:driverId', async (req, res) => {
   }
 });
 
+// @desc    جلب عدد الرسائل غير المقروءة لمستخدم معين حسب دوره
+// @route   GET /api/messages/:driverId/unread-count
+router.get('/:driverId/unread-count', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    const { role } = req.query;
+
+    let query = { driver: driverId, isRead: false };
+    if (role === 'support') {
+      query.senderRole = { $ne: 'support' };
+    } else {
+      query.senderRole = 'support';
+    }
+
+    const count = await Message.countDocuments(query);
+    res.status(200).json({
+      success: true,
+      count,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    جلب المحادثات النشطة (لموظفي الدعم)
 // @route   GET /api/messages/support/conversations
 router.get('/support/conversations', async (req, res) => {
   try {
-    // جلب أحدث رسالة لكل مستخدم
+    // جلب أحدث رسالة لكل مستخدم ومجموع الرسائل غير المقروءة للدعم
     const conversations = await Message.aggregate([
       { $sort: { createdAt: -1 } },
       {
         $group: {
           _id: '$driver',
           lastMessage: { $first: '$$ROOT' },
+          unreadCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ['$senderRole', 'support'] },
+                    { $eq: ['$isRead', false] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
         },
       },
     ]);
@@ -79,6 +121,7 @@ router.get('/support/conversations', async (req, res) => {
       return {
         driver: driverInfo,
         lastMessage: conv.lastMessage,
+        unreadCount: conv.unreadCount || 0,
       };
     }).filter(conv => conv.driver != null); // استبعاد أي رسائل لمستخدم محذوف
 
