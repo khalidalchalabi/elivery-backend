@@ -310,8 +310,8 @@ router.get('/:shopId/financials', async (req, res) => {
       totalEarnings += order.priceDetails?.itemsPrice || 0;
     });
 
-    // 2. حساب مجموع المدفوعات المسلمة كاش
-    const payouts = await Payout.find({ shop: shopId });
+    // 2. حساب مجموع المدفوعات المسلمة كاش (المؤكدة فقط)
+    const payouts = await Payout.find({ shop: shopId, status: 'confirmed' });
     let totalPaid = 0;
     payouts.forEach(payout => {
       totalPaid += payout.amount || 0;
@@ -328,6 +328,28 @@ router.get('/:shopId/financials', async (req, res) => {
         remainingDues,
       }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    تحديث حالة الدفعة المالية (موافقة/رفض من قبل التاجر)
+// @route   PUT /api/shops/:shopId/payouts/:payoutId
+router.put('/:shopId/payouts/:payoutId', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['confirmed', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'الحالة المرسلة غير صالحة' });
+    }
+
+    const payout = await Payout.findOne({ _id: req.params.payoutId, shop: req.params.shopId });
+    if (!payout) {
+      return res.status(404).json({ success: false, message: 'الدفعة المالية غير موجودة' });
+    }
+
+    payout.status = status;
+    await payout.save();
+    res.status(200).json({ success: true, message: 'تم تحديث حالة الدفعة بنجاح', data: payout });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

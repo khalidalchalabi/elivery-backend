@@ -17,6 +17,11 @@ const PayoutSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    status: {
+      type: String,
+      enum: ['pending', 'confirmed', 'rejected'],
+      default: 'pending',
+    },
     paidAt: {
       type: Date,
       default: Date.now,
