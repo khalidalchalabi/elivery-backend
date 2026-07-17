@@ -3,18 +3,19 @@ const router = express.Router();
 const Message = require('../models/Message');
 const User = require('../models/User');
 
-// @desc    إرسال رسالة جديدة (سواء من السائق أو الدعم)
+// @desc    إرسال رسالة جديدة (سواء من السائق أو الزبون أو الدعم)
 // @route   POST /api/messages
 router.post('/', async (req, res) => {
   try {
-    const { driverId, senderRole, text } = req.body;
+    const userId = req.body.driverId || req.body.userId;
+    const { senderRole, text } = req.body;
 
-    if (!driverId || !senderRole || !text) {
-      return res.status(400).json({ success: false, message: 'يجب توفير معرف السائق، دور المرسل ونص الرسالة' });
+    if (!userId || !senderRole || !text) {
+      return res.status(400).json({ success: false, message: 'يجب توفير معرف المستخدم، دور المرسل ونص الرسالة' });
     }
 
     const message = new Message({
-      driver: driverId,
+      driver: userId,
       senderRole,
       text,
     });
@@ -31,7 +32,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// @desc    جلب محادثة سائق معين
+// @desc    جلب محادثة مستخدم معين
 // @route   GET /api/messages/:driverId
 router.get('/:driverId', async (req, res) => {
   try {
@@ -39,7 +40,6 @@ router.get('/:driverId', async (req, res) => {
 
     const messages = await Message.find({ driver: driverId }).sort({ createdAt: 1 });
 
-    // تحديث الرسائل غير المقروءة لتصبح مقروءة (لتبسيط الأمر، يمكن تحديدها حسب دور القارئ مستقبلاً)
     await Message.updateMany(
       { driver: driverId, isRead: false },
       { $set: { isRead: true } }
@@ -59,7 +59,7 @@ router.get('/:driverId', async (req, res) => {
 // @route   GET /api/messages/support/conversations
 router.get('/support/conversations', async (req, res) => {
   try {
-    // جلب أحدث رسالة لكل سائق
+    // جلب أحدث رسالة لكل مستخدم
     const conversations = await Message.aggregate([
       { $sort: { createdAt: -1 } },
       {
@@ -70,9 +70,9 @@ router.get('/support/conversations', async (req, res) => {
       },
     ]);
 
-    // جلب معلومات السائقين للمحادثات
+    // جلب معلومات المستخدمين للمحادثات (سائقين وزبائن)
     const driverIds = conversations.map((conv) => conv._id);
-    const drivers = await User.find({ _id: { $in: driverIds } }, 'name phone profilePicture');
+    const drivers = await User.find({ _id: { $in: driverIds } }, 'name phone profilePicture role');
 
     const result = conversations.map((conv) => {
       const driverInfo = drivers.find((d) => d._id.toString() === conv._id.toString());
@@ -80,7 +80,7 @@ router.get('/support/conversations', async (req, res) => {
         driver: driverInfo,
         lastMessage: conv.lastMessage,
       };
-    }).filter(conv => conv.driver != null); // استبعاد أي رسائل لسائق محذوف
+    }).filter(conv => conv.driver != null); // استبعاد أي رسائل لمستخدم محذوف
 
     // ترتيب حسب الأحدث
     result.sort((a, b) => new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt));

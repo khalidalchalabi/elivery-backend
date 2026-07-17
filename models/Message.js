@@ -9,7 +9,7 @@ const MessageSchema = new mongoose.Schema(
     },
     senderRole: {
       type: String,
-      enum: ['driver', 'support'],
+      enum: ['driver', 'customer', 'support'],
       required: [true, 'يجب تحديد دور المرسل'],
     },
     text: {
