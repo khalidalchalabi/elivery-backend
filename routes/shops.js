@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
 // @route   POST /api/shops
 router.post('/', async (req, res) => {
   try {
-    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude } = req.body;
+    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude, discountPercentage } = req.body;
 
     let shopExists = await Shop.findOne({ name });
     if (shopExists) {
@@ -64,6 +64,7 @@ router.post('/', async (req, res) => {
       deliveryTime,
       deliveryFee,
       categories,
+      discountPercentage: discountPercentage ? parseFloat(discountPercentage) : 0,
       ...(location && { location })
     });
 
@@ -99,7 +100,7 @@ router.delete('/:id', async (req, res) => {
 // @route   PUT /api/shops/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen } = req.body;
+    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage } = req.body;
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
@@ -112,6 +113,7 @@ router.put('/:id', async (req, res) => {
     if (deliveryTime) shop.deliveryTime = deliveryTime;
     if (categories) shop.categories = categories;
     if (isOpen !== undefined) shop.isOpen = isOpen;
+    if (discountPercentage !== undefined) shop.discountPercentage = parseFloat(discountPercentage);
 
     if (latitude !== undefined && longitude !== undefined) {
       shop.location = {

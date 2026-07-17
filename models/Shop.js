@@ -47,6 +47,12 @@ const ShopSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    discountPercentage: {
+      type: Number,
+      default: 0,
+      min: [0, 'لا يمكن أن يكون الخصم بالسالب'],
+      max: [100, 'لا يمكن أن يتجاوز الخصم 100%'],
+    },
   },
   {
     timestamps: true,
