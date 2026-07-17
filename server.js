@@ -43,6 +43,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // خدمة الملفات المرفوعة بشكل استاتيكي
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
+// تقديم موقع الزبون (Flutter Web)
+app.use('/customer', express.static(path.join(__dirname, 'public/customer')));
+
 // تقديم موقع الكادر (Flutter Web) من المجلد الرئيسي
 app.use(express.static(path.join(__dirname, 'public/web')));
 
@@ -59,6 +62,11 @@ app.use('/api/categories', require('./routes/categories'));
 // اختبار تشغيل الخادم
 app.get('/', (req, res) => {
   res.json({ message: 'مرحباً بك في الخلفية البرمجية لتطبيق التوصيل!' });
+});
+
+// التوجيه لدعم روابط SPA لتطبيق الزبون
+app.get('/customer/*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/customer', 'index.html'));
 });
 
 // التعامل مع المسارات غير الموجودة (404)
