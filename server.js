@@ -65,7 +65,7 @@ app.get('/', (req, res) => {
 });
 
 // التوجيه لدعم روابط SPA لتطبيق الزبون
-app.get('/customer/*', (req, res) => {
+app.get('/customer/:path*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/customer', 'index.html'));
 });
 
