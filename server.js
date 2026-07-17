@@ -9,7 +9,29 @@ const path = require('path');
 dotenv.config();
 
 // الاتصال بقاعدة البيانات MongoDB
-connectDB();
+connectDB().then(() => {
+  seedDefaultCategories();
+});
+
+// دالة لتغذية قاعدة البيانات تلقائياً بالأقسام الافتراضية
+async function seedDefaultCategories() {
+  try {
+    const Category = require('./models/Category');
+    const count = await Category.countDocuments();
+    if (count === 0) {
+      const defaults = [
+        { name: 'مطاعم', displayName: 'المطاعم', emoji: '🍔🍟', tag: 'حتى 50%', backgroundColor: '#E6FDF4', order: 0 },
+        { name: 'سوبر ماركت', displayName: 'سوبر ماركت', emoji: '🛒🍎', tag: 'سريع', backgroundColor: '#ECFDF5', order: 1 },
+        { name: 'خضار وفواكه', displayName: 'البقالة', emoji: '🥦🍊', tag: 'طازج', backgroundColor: '#FEF3C7', order: 2 },
+        { name: 'أجهزة إلكترونية', displayName: 'المتاجر', emoji: '🎧🧸', tag: 'منوع', backgroundColor: '#F3E8FF', order: 3 },
+      ];
+      await Category.insertMany(defaults);
+      console.log('Successfully seeded default categories into database.');
+    }
+  } catch (err) {
+    console.error('Error seeding categories:', err);
+  }
+}
 
 const app = express();
 
@@ -32,6 +54,7 @@ app.use('/api/ads', require('./routes/ads'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/promo', require('./routes/promo'));
+app.use('/api/categories', require('./routes/categories'));
 
 // اختبار تشغيل الخادم
 app.get('/', (req, res) => {
