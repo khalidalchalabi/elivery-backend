@@ -252,4 +252,85 @@ router.post('/:id/rate', async (req, res) => {
   }
 });
 
+const Payout = require('../models/Payout');
+const Order = require('../models/Order');
+
+// @desc    تسجيل دفعة مالية جديدة للمحل (خاص بالمسؤول/المالك)
+// @route   POST /api/shops/:shopId/payouts
+router.post('/:shopId/payouts', async (req, res) => {
+  try {
+    const { amount, notes } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'الرجاء إدخال مبلغ صحيح' });
+    }
+
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'المحل غير موجود' });
+    }
+
+    const payout = new Payout({
+      shop: req.params.shopId,
+      amount,
+      notes: notes || '',
+    });
+
+    await payout.save();
+    res.status(201).json({ success: true, message: 'تم تسجيل الدفعة بنجاح', data: payout });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب كافة الدفعات المالية المسجلة للمحل
+// @route   GET /api/shops/:shopId/payouts
+router.get('/:shopId/payouts', async (req, res) => {
+  try {
+    const payouts = await Payout.find({ shop: req.params.shopId }).sort({ paidAt: -1 });
+    res.status(200).json({ success: true, count: payouts.length, data: payouts });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب ملخص مالي كامل للمحل (المبيعات الكلية، المدفوعات، المستحقات المتبقية)
+// @route   GET /api/shops/:shopId/financials
+router.get('/:shopId/financials', async (req, res) => {
+  try {
+    const shopId = req.params.shopId;
+    const shop = await Shop.findById(shopId);
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'المحل غير موجود' });
+    }
+
+    // 1. حساب مبيعات المحل الكلية من الطلبات المكتملة
+    const completedOrders = await Order.find({ shop: shopId, status: 'completed' });
+    let totalEarnings = 0;
+    completedOrders.forEach(order => {
+      totalEarnings += order.priceDetails?.itemsPrice || 0;
+    });
+
+    // 2. حساب مجموع المدفوعات المسلمة كاش
+    const payouts = await Payout.find({ shop: shopId });
+    let totalPaid = 0;
+    payouts.forEach(payout => {
+      totalPaid += payout.amount || 0;
+    });
+
+    // 3. المستحقات المتبقية
+    const remainingDues = totalEarnings - totalPaid;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalEarnings,
+        totalPaid,
+        remainingDues,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
