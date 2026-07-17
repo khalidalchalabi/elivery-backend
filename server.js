@@ -64,8 +64,8 @@ app.get('/', (req, res) => {
   res.json({ message: 'مرحباً بك في الخلفية البرمجية لتطبيق التوصيل!' });
 });
 
-// التوجيه لدعم روابط SPA لتطبيق الزبون
-app.get('/customer/:path*', (req, res) => {
+// التوجيه لدعم روابط SPA لتطبيق الزبون (باستخدام RegExp لتفادي أخطاء المترجم)
+app.get(/^\/customer($|\/.*)/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public/customer', 'index.html'));
 });
 
