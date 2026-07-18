@@ -58,6 +58,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/promo', require('./routes/promo'));
 app.use('/api/categories', require('./routes/categories'));
+app.use('/api/settings', require('./routes/settings'));
 
 // اختبار تشغيل الخادم
 app.get('/', (req, res) => {
