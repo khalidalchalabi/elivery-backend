@@ -31,6 +31,28 @@
 
   <title>دقيقة وجايك - سوق الخالص للطلب والتوصيل</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    window.gm_authFailure = function() {
+      var div = document.createElement('div');
+      div.style.position = 'fixed';
+      div.style.top = '16px';
+      div.style.left = '16px';
+      div.style.right = '16px';
+      div.style.background = '#EF4444';
+      div.style.color = 'white';
+      div.style.padding = '20px';
+      div.style.borderRadius = '12px';
+      div.style.zIndex = '9999999';
+      div.style.fontSize = '15px';
+      div.style.fontWeight = 'bold';
+      div.style.textAlign = 'center';
+      div.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
+      div.style.fontFamily = 'sans-serif';
+      div.style.direction = 'rtl';
+      div.innerHTML = '⚠️ فشل تفعيل خرائط جوجل (Google Maps API Auth Failure).<br><br>يرجى التأكد من تفعيل الدفع (Billing) أو تفعيل Maps JavaScript API في حساب Google Cloud الخاص بك.';
+      document.body.appendChild(div);
+    };
+  </script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyChC4g3oNs2MoSht1orEokBPOYu_Z5uSOw"></script>
 </head>
 <body>
