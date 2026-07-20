@@ -194,7 +194,7 @@ router.get('/:id', async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate('customer', 'name phone email')
-      .populate('driver', 'name phone driverDetails.vehicleType driverDetails.plateNumber')
+      .populate('driver', 'name phone driverDetails.vehicleType driverDetails.plateNumber driverDetails.currentLocation')
       .populate('shop', 'name categories');
 
     if (!order) {
