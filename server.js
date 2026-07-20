@@ -46,6 +46,11 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 // تقديم موقع الزبون (Flutter Web)
 app.use('/customer', express.static(path.join(__dirname, 'public/customer')));
 
+// صفحة سياسة الخصوصية الرسمية لمتجر جوجل بلاي
+app.get('/privacy.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/privacy.html'));
+});
+
 // تقديم موقع الكادر (Flutter Web) من المجلد الرئيسي
 app.use(express.static(path.join(__dirname, 'public/web')));
 
