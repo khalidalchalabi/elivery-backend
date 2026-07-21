@@ -26,6 +26,10 @@ const PromoCodeSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
+  },
+  minOrderAmount: {
+    type: Number,
+    default: 0
   }
 }, { timestamps: true });
 

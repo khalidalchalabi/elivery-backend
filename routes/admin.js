@@ -78,7 +78,7 @@ router.get('/top-customers', async (req, res) => {
 // @route   POST /api/admin/promo
 router.post('/promo', async (req, res) => {
   try {
-    const { code, discountPercentage, expirationDate, assignedToPhone } = req.body;
+    const { code, discountPercentage, expirationDate, assignedToPhone, minOrderAmount } = req.body;
     if (!code || !discountPercentage || !expirationDate) {
       return res.status(400).json({ success: false, message: 'يرجى توفير جميع البيانات المطلوبة' });
     }
@@ -96,7 +96,8 @@ router.post('/promo', async (req, res) => {
       code,
       discountPercentage,
       expirationDate,
-      assignedTo
+      assignedTo,
+      minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0
     });
 
     await promo.save();

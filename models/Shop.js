@@ -53,6 +53,10 @@ const ShopSchema = new mongoose.Schema(
       min: [0, 'لا يمكن أن يكون الخصم بالسالب'],
       max: [100, 'لا يمكن أن يتجاوز الخصم 100%'],
     },
+    minOrderAmountForDiscount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
