@@ -7,26 +7,60 @@ const User = require('../models/User');
 // @route   GET /api/orders
 router.get('/', async (req, res) => {
   try {
-    const orders = await Order.find()
+    const { status, driver, shop, limit = 50, showCompleted = 'false' } = req.query;
+
+    const query = {};
+
+    if (status) {
+      if (status.includes(',')) {
+        query.status = { $in: status.split(',') };
+      } else {
+        query.status = status;
+      }
+    } else if (showCompleted !== 'true') {
+      // بشكل افتراضي، لتجنب البطء، نجلب الطلبات النشطة فقط والطلب المنجز/الملغي خلال الـ 24 ساعة الماضية
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      query.$or = [
+        { status: { $in: ['pending', 'preparing', 'ready', 'accepted', 'picking_up', 'delivering'] } },
+        { status: { $in: ['completed', 'cancelled'] }, createdAt: { $gte: oneDayAgo } }
+      ];
+    }
+
+    if (driver) {
+      query.driver = driver;
+    }
+    if (shop) {
+      query.shop = shop;
+    }
+
+    const orders = await Order.find(query)
       .populate('customer', 'name phone')
       .populate('driver', 'name phone')
       .populate('shop', 'name location')
+      .limit(parseInt(limit))
       .lean()
       .sort({ createdAt: -1 });
 
-    // إرفاق رقم هاتف صاحب المحل (التاجر) ديناميكياً
-    const ordersWithMerchant = await Promise.all(
-      orders.map(async (order) => {
-        if (order.shop && order.shop._id) {
-          const merchant = await User.findOne({ role: 'merchant', shop: order.shop._id }).select('phone');
-          return {
-            ...order,
-            merchantPhone: merchant ? merchant.phone : null,
-          };
-        }
-        return order;
-      })
-    );
+    // جلب جميع هواتف التجار في استعلام واحد لتجنب الضغط على قاعدة البيانات
+    const shopIds = orders.map(o => o.shop && o.shop._id).filter(Boolean);
+    const merchants = await User.find({ role: 'merchant', shop: { $in: shopIds } }).select('phone shop').lean();
+    const merchantPhoneMap = {};
+    merchants.forEach(m => {
+      if (m.shop) {
+        merchantPhoneMap[m.shop.toString()] = m.phone;
+      }
+    });
+
+    const ordersWithMerchant = orders.map((order) => {
+      let merchantPhone = null;
+      if (order.shop && order.shop._id) {
+        merchantPhone = merchantPhoneMap[order.shop._id.toString()] || null;
+      }
+      return {
+        ...order,
+        merchantPhone
+      };
+    });
 
     res.status(200).json({ success: true, count: ordersWithMerchant.length, data: ordersWithMerchant });
   } catch (error) {
@@ -38,9 +72,11 @@ router.get('/', async (req, res) => {
 // @route   GET /api/orders/shop/:shopId
 router.get('/shop/:shopId', async (req, res) => {
   try {
+    const { limit = 50 } = req.query;
     const orders = await Order.find({ shop: req.params.shopId })
       .populate('customer', 'name phone')
       .populate('driver', 'name phone')
+      .limit(parseInt(limit))
       .sort({ createdAt: -1 });
     res.status(200).json({ success: true, count: orders.length, data: orders });
   } catch (error) {
@@ -260,6 +296,9 @@ router.put('/:id/accept', async (req, res) => {
     await order.save();
 
     // تحديث حالة السائق إلى غير متاح حالياً لاستلام طلبات أخرى
+    if (!driver.driverDetails) {
+      driver.driverDetails = {};
+    }
     driver.driverDetails.isAvailable = false;
     await driver.save();
 
