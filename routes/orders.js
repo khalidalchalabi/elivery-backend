@@ -7,7 +7,7 @@ const User = require('../models/User');
 // @route   GET /api/orders
 router.get('/', async (req, res) => {
   try {
-    const { status, driver, shop, limit = 50, showCompleted = 'false' } = req.query;
+    const { status, driver, shop, customer, limit = 50, showCompleted = 'false' } = req.query;
 
     const query = {};
 
@@ -31,6 +31,9 @@ router.get('/', async (req, res) => {
     }
     if (shop) {
       query.shop = shop;
+    }
+    if (customer) {
+      query.customer = customer;
     }
 
     const orders = await Order.find(query)
