@@ -10,8 +10,25 @@ router.get('/', async (req, res) => {
     const orders = await Order.find()
       .populate('customer', 'name phone')
       .populate('driver', 'name phone')
+      .populate('shop', 'name location')
+      .lean()
       .sort({ createdAt: -1 });
-    res.status(200).json({ success: true, count: orders.length, data: orders });
+
+    // إرفاق رقم هاتف صاحب المحل (التاجر) ديناميكياً
+    const ordersWithMerchant = await Promise.all(
+      orders.map(async (order) => {
+        if (order.shop && order.shop._id) {
+          const merchant = await User.findOne({ role: 'merchant', shop: order.shop._id }).select('phone');
+          return {
+            ...order,
+            merchantPhone: merchant ? merchant.phone : null,
+          };
+        }
+        return order;
+      })
+    );
+
+    res.status(200).json({ success: true, count: ordersWithMerchant.length, data: ordersWithMerchant });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
