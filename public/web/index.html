@@ -15,63 +15,72 @@
     the `--base-href` argument provided to `flutter build`.
   -->
   <base href="/">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var registration of registrations) {
+          registration.unregister();
+          console.log('Unregistered active service worker.');
+        }
+      }).catch(function(err) {
+        console.warn('Service worker unregistration failed: ', err);
+      });
+    }
+  </script>
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="تطبيق دقيقة وجايك - المنصة الأسرع لطلب وتوصيل الطلبات من سوق الخالص. اطلب طعامك، مسواكك، واحتياجاتك اليومية بكل سهولة.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="staff_app">
+  <meta name="apple-mobile-web-app-title" content="دقيقة وجايك">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>staff_app</title>
+  <title>دقيقة وجايك - سوق الخالص للطلب والتوصيل</title>
   <link rel="manifest" href="manifest.json">
-  <style>
-    body {
-      background-color: #F8FAFC;
-      margin: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    .loading-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    .spinner {
-      width: 50px;
-      height: 50px;
-      border: 5px solid #E2E8F0;
-      border-top: 5px solid #0D9488;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .loading-text {
-      color: #0D9488;
-      font-size: 18px;
-      font-weight: bold;
-    }
-  </style>
+  <script>
+    window.gm_authFailure = function() {
+      var div = document.createElement('div');
+      div.style.position = 'fixed';
+      div.style.top = '16px';
+      div.style.left = '16px';
+      div.style.right = '16px';
+      div.style.background = '#EF4444';
+      div.style.color = 'white';
+      div.style.padding = '20px';
+      div.style.borderRadius = '12px';
+      div.style.zIndex = '9999999';
+      div.style.fontSize = '15px';
+      div.style.fontWeight = 'bold';
+      div.style.textAlign = 'center';
+      div.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
+      div.style.fontFamily = 'sans-serif';
+      div.style.direction = 'rtl';
+      div.innerHTML = '⚠️ فشل تفعيل خرائط جوجل (Google Maps API Auth Failure).<br><br>يرجى التأكد من تفعيل الدفع (Billing) أو تفعيل Maps JavaScript API في حساب Google Cloud الخاص بك.';
+      document.body.appendChild(div);
+    };
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyChC4g3oNs2MoSht1orEokBPOYu_Z5uSOw"></script>
 </head>
 <body>
-  <div class="loading-container">
-    <div class="spinner"></div>
-    <div class="loading-text">جاري تحميل دقيقة وجايك...</div>
-  </div>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script>
+    window.flutterConfiguration = {
+      renderer: "html"
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
