@@ -1,0 +1,140 @@
+const express = require('express');
+const router = Router = express.Router();
+const Ad = require('../models/Ad');
+const fs = require('fs');
+const path = require('path');
+
+// دالة مساعدة لحفظ الصورة المرفوعة كـ base64 (نحفظها مباشرة في قاعدة البيانات للعمل على السيرفرات المجانية مثل Render/Vercel)
+function saveBase64Image(base64Str, req) {
+  return base64Str;
+}
+
+// @desc    جلب كافة الإعلانات النشطة
+// @route   GET /api/ads
+router.get('/', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    let query = {};
+    if (phone && phone.trim() !== '') {
+      query = {
+        $or: [
+          { targetPhone: null },
+          { targetPhone: phone.trim() }
+        ]
+      };
+    } else {
+      query = { targetPhone: null };
+    }
+    const ads = await Ad.find(query).sort({ createdAt: -1 });
+    res.status(200).json({ success: true, count: ads.length, data: ads });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    إضافة إعلان جديد (خاص بالمالك والمدير)
+// @route   POST /api/ads
+router.post('/', async (req, res) => {
+  try {
+    const { title, subtitle, actionText, imagePath, userRole, type, shopId } = req.body;
+
+    // التحقق من الصلاحيات
+    if (userRole !== 'owner' && userRole !== 'admin') {
+      return res.status(403).json({ success: false, message: 'غير مصرح لك بإدارة الإعلانات. المالك والمدير فقط!' });
+    }
+
+    const isBanner = (!type || type === 'banner');
+    if (!title || (isBanner && !imagePath)) {
+      return res.status(400).json({ success: false, message: 'الرجاء إدخال عنوان الإعلان. وللإعلانات الرئيسية يجب إرفاق صورة.' });
+    }
+
+    // حفظ الصورة إذا كانت base64
+    const resolvedImagePath = saveBase64Image(imagePath, req);
+
+    const ad = new Ad({
+      title,
+      subtitle,
+      actionText: actionText || 'اطلب الآن',
+      imagePath: resolvedImagePath,
+      type: type || 'banner',
+      shopId: shopId || null,
+    });
+
+    await ad.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'تم إضافة الإعلان بنجاح',
+      data: ad,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    تعديل إعلان موجود (خاص بالمالك والمدير)
+// @route   PUT /api/ads/:id
+router.put('/:id', async (req, res) => {
+  try {
+    const { title, subtitle, actionText, imagePath, userRole, type, shopId } = req.body;
+
+    // التحقق من الصلاحيات
+    if (userRole !== 'owner' && userRole !== 'admin') {
+      return res.status(403).json({ success: false, message: 'غير مصرح لك بإدارة الإعلانات. المالك والمدير فقط!' });
+    }
+
+    const ad = await Ad.findById(req.params.id);
+    if (!ad) {
+      return res.status(404).json({ success: false, message: 'الإعلان غير موجود' });
+    }
+
+    if (title) ad.title = title;
+    if (subtitle !== undefined) ad.subtitle = subtitle;
+    if (actionText !== undefined) ad.actionText = actionText;
+    if (type) ad.type = type;
+    if (shopId !== undefined) ad.shopId = shopId || null;
+    if (imagePath) {
+      ad.imagePath = saveBase64Image(imagePath, req);
+    }
+
+    await ad.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تعديل الإعلان بنجاح',
+      data: ad,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    حذف إعلان معين (خاص بالمالك والمدير)
+// @route   DELETE /api/ads/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    const { userRole } = req.body;
+
+    // التحقق من الصلاحيات
+    if (userRole !== 'owner' && userRole !== 'admin') {
+      return res.status(403).json({ success: false, message: 'غير مصرح لك بإدارة الإعلانات. المالك والمدير فقط!' });
+    }
+
+    const ad = await Ad.findById(req.params.id);
+    if (!ad) {
+      return res.status(404).json({ success: false, message: 'الإعلان غير موجود' });
+    }
+
+    await ad.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف الإعلان بنجاح',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+module.exports = router;
+
