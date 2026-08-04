@@ -114,7 +114,7 @@ router.get('/support/conversations', async (req, res) => {
 
     // جلب معلومات المستخدمين للمحادثات (سائقين وزبائن)
     const driverIds = conversations.map((conv) => conv._id);
-    const drivers = await User.find({ _id: { $in: driverIds } }, 'name phone profilePicture role');
+    const drivers = await User.find({ _id: { $in: driverIds } }, 'name phone profilePicture role assignedSupport assignedSupportName');
 
     const result = conversations.map((conv) => {
       const driverInfo = drivers.find((d) => d._id.toString() === conv._id.toString());
@@ -131,6 +131,64 @@ router.get('/support/conversations', async (req, res) => {
     res.status(200).json({
       success: true,
       data: result,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    استلام محادثة الدعم من قبل موظف معين
+// @route   POST /api/messages/support/claim
+router.post('/support/claim', async (req, res) => {
+  try {
+    const { userId, staffId, staffName } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'يجب تحديد المستخدم' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    user.assignedSupport = staffId || null;
+    user.assignedSupportName = staffName || 'موظف الدعم';
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `تم استلام المحادثة بنجاح بواسطة ${user.assignedSupportName}`,
+      data: {
+        assignedSupport: user.assignedSupport,
+        assignedSupportName: user.assignedSupportName,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    إلغاء استلام المحادثة / إتاحتها لباقي الموظفين
+// @route   POST /api/messages/support/release
+router.post('/support/release', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'يجب تحديد المستخدم' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    user.assignedSupport = null;
+    user.assignedSupportName = null;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إتاحة المحادثة لجميع موظفي الدعم بنجاح',
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

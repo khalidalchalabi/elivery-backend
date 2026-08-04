@@ -90,6 +90,15 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    assignedSupport: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    assignedSupportName: {
+      type: String,
+      default: null,
+    },
     savedAddresses: [
       {
         label: { type: String, required: true }, // المنزل، العمل، بيت الأهل...
