@@ -7,6 +7,8 @@ const path = require('path');
 // دالة مساعدة لحفظ الصورة المرفوعة كـ base64 (نحفظها مباشرة في قاعدة البيانات للعمل على السيرفرات المجانية مثل Render/Vercel)
 function saveBase64Image(base64Str, req) {
   return base64Str;
+}
+
 // دالة مساعدة لحساب المسافة بالكيلومتر بين نقطتين (Haversine formula)
 function getDistanceKm(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Infinity;
