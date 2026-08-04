@@ -22,28 +22,35 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// @desc    جلب كافة الإعلانات النشطة (مع تصفية جغرافية حسب موقع الزبون)
+// @desc    جلب كافة الإعلانات النشطة (مع تصفية جغرافية حسب موقع الزبون، بينما يرى المدير الجميع)
 // @route   GET /api/ads
 router.get('/', async (req, res) => {
   try {
-    const { phone, lat, lng } = req.query;
+    const { phone, lat, lng, admin, all } = req.query;
+
     let query = {};
-    if (phone && phone.trim() !== '') {
+    if (admin !== 'true' && all !== 'true' && phone && phone.trim() !== '') {
       query = {
         $or: [
           { targetPhone: null },
           { targetPhone: phone.trim() }
         ]
       };
-    } else {
+    } else if (admin !== 'true' && all !== 'true') {
       query = { targetPhone: null };
     }
+
     const ads = await Ad.find(query).sort({ createdAt: -1 });
+
+    // لوحة التحكم والمدير يريان جميع الإعلانات دائماً
+    if (admin === 'true' || all === 'true') {
+      return res.status(200).json({ success: true, count: ads.length, data: ads });
+    }
 
     const userLat = lat ? parseFloat(lat) : null;
     const userLng = lng ? parseFloat(lng) : null;
 
-    // تصفية الإعلانات حسب النطاق الجغرافي للزبون
+    // تصفية الإعلانات للزبون حسب النطاق الجغرافي
     const filteredAds = ads.filter(ad => {
       const zoneType = ad.targetZoneType || 'all';
       if (zoneType === 'all') return true;
