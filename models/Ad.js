@@ -35,6 +35,40 @@ const AdSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    // النطاق الجغرافي للاعلان
+    targetZoneType: {
+      type: String,
+      enum: ['all', 'circle', 'box'],
+      default: 'all',
+    },
+    centerLat: {
+      type: Number,
+      default: null,
+    },
+    centerLng: {
+      type: Number,
+      default: null,
+    },
+    radiusKm: {
+      type: Number,
+      default: 5,
+    },
+    minLat: {
+      type: Number,
+      default: null,
+    },
+    maxLat: {
+      type: Number,
+      default: null,
+    },
+    minLng: {
+      type: Number,
+      default: null,
+    },
+    maxLng: {
+      type: Number,
+      default: null,
+    },
   },
   {
     timestamps: true,
