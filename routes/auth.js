@@ -93,9 +93,13 @@ router.post('/customer/login', async (req, res) => {
 // @route   DELETE /api/auth/customer/:id
 router.delete('/customer/:id', async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const { id } = req.params;
+    let user = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      user = await User.findById(id);
+    }
     if (!user) {
-      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+      return res.status(200).json({ success: true, message: 'تم حذف الحساب بنجاح' });
     }
 
     if (user.role !== 'customer') {
@@ -603,13 +607,19 @@ router.put('/users/:id/update-profile', async (req, res) => {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال الاسم ورقم الهاتف' });
     }
 
-    const user = await User.findById(id);
+    let user = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      user = await User.findById(id);
+    }
+    if (!user && phone) {
+      user = await User.findOne({ phone, role: 'customer' });
+    }
     if (!user) {
-      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود، يرجى تسجيل الدخول بحسابك الحقيقي أولاً' });
     }
 
-    // التحقق من عدم تكرار رقم الهاتف
-    const existingUser = await User.findOne({ phone, _id: { $ne: id }, role: 'customer' });
+    // التحقق من عدم تكرار رقم الهاتف مع زبون آخر
+    const existingUser = await User.findOne({ phone, _id: { $ne: user._id }, role: 'customer' });
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'رقم الهاتف هذا مسجل بالفعل لمستخدم آخر' });
     }
