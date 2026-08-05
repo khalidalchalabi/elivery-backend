@@ -81,8 +81,8 @@ router.get('/top-customers', async (req, res) => {
 // @route   POST /api/admin/promo
 router.post('/promo', async (req, res) => {
   try {
-    const { code, discountPercentage, expirationDate, assignedToPhone, minOrderAmount } = req.body;
-    if (!code || !discountPercentage || !expirationDate) {
+    const { code, discountPercentage, expirationDate, assignedToPhone, minOrderAmount, isFreeDelivery } = req.body;
+    if (!code || !expirationDate) {
       return res.status(400).json({ success: false, message: 'يرجى توفير جميع البيانات المطلوبة' });
     }
 
@@ -97,7 +97,8 @@ router.post('/promo', async (req, res) => {
 
     const promo = new PromoCode({
       code,
-      discountPercentage,
+      discountPercentage: discountPercentage ? Number(discountPercentage) : 0,
+      isFreeDelivery: Boolean(isFreeDelivery),
       expirationDate,
       assignedTo,
       minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0
@@ -108,9 +109,10 @@ router.post('/promo', async (req, res) => {
     // إرسال إشعار تلقائي للزبون المهدى له الخصم
     if (assignedToPhone && assignedToPhone.trim() !== '') {
       try {
+        const descText = isFreeDelivery ? 'توصيل مجاني 🚚' : `خصم بقيمة ${discountPercentage}%`;
         const notif = new Ad({
           title: '🎁 هدية خصم خاصة لك!',
-          subtitle: `لقد تم إهداؤك كود خصم بقيمة ${discountPercentage}% (الحد الأدنى للطلب ${minOrderAmount} د.ع). رمز الخصم هو: ${code}`,
+          subtitle: `لقد تم إهداؤك كود خصم (${descText}). رمز الخصم هو: ${code}`,
           actionText: 'استخدم الكوبون',
           type: 'notification',
           targetPhone: assignedToPhone.trim()

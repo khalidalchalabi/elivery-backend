@@ -35,7 +35,8 @@ router.post('/apply', async (req, res) => {
       success: true,
       data: {
         code: promo.code,
-        discountPercentage: promo.discountPercentage,
+        discountPercentage: promo.discountPercentage || 0,
+        isFreeDelivery: Boolean(promo.isFreeDelivery),
         minOrderAmount: promo.minOrderAmount || 0
       }
     });

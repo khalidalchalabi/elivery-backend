@@ -10,9 +10,13 @@ const PromoCodeSchema = new mongoose.Schema({
   },
   discountPercentage: { 
     type: Number, 
-    required: true,
-    min: 1,
+    default: 0,
+    min: 0,
     max: 100
+  },
+  isFreeDelivery: {
+    type: Boolean,
+    default: false
   },
   expirationDate: { 
     type: Date, 

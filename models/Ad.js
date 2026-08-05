@@ -35,39 +35,32 @@ const AdSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
-    // النطاق الجغرافي للاعلان
-    targetZoneType: {
+    isGlobal: {
+      type: Boolean,
+      default: true,
+    },
+    targetLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [Longitude, Latitude]
+        default: null,
+      },
+      address: {
+        type: String,
+        default: '',
+      },
+    },
+    targetRadiusKm: {
+      type: Number,
+      default: 0,
+    },
+    zoneName: {
       type: String,
-      enum: ['all', 'circle', 'box'],
-      default: 'all',
-    },
-    centerLat: {
-      type: Number,
-      default: null,
-    },
-    centerLng: {
-      type: Number,
-      default: null,
-    },
-    radiusKm: {
-      type: Number,
-      default: 5,
-    },
-    minLat: {
-      type: Number,
-      default: null,
-    },
-    maxLat: {
-      type: Number,
-      default: null,
-    },
-    minLng: {
-      type: Number,
-      default: null,
-    },
-    maxLng: {
-      type: Number,
-      default: null,
+      default: 'جميع المناطق',
     },
   },
   {
