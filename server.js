@@ -64,6 +64,9 @@ app.get('/privacy.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/privacy.html'));
 });
 
+// تقديم ملفات التحميل المباشر والملفات العامة (APKs)
+app.use(express.static(path.join(__dirname, 'public')));
+
 // تقديم موقع الكادر (Flutter Web) من المجلد الرئيسي
 app.use(express.static(path.join(__dirname, 'public/web')));
 
