@@ -59,9 +59,13 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 // تقديم موقع الزبون (Flutter Web)
 app.use('/customer', express.static(path.join(__dirname, 'public/customer')));
 
-// صفحة سياسة الخصوصية الرسمية لمتجر جوجل بلاي
-app.get('/privacy.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/privacy.html'));
+// مسارات التحميل المباشر لملفات الـ APK
+app.get('/daqeqa-staff.apk', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/daqeqa-staff.apk'));
+});
+
+app.get('/daqeqa-customer.apk', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/daqeqa-customer.apk'));
 });
 
 // تقديم ملفات التحميل المباشر والملفات العامة (APKs)
