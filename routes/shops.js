@@ -147,6 +147,29 @@ router.get('/:shopId/products', async (req, res) => {
 
 // @desc    إضافة منتج/بضاعة جديدة لمحل معين (خاص بالمسؤول)
 // @route   POST /api/shops/:shopId/products
+function normalizeDiscount(price, origP, discP) {
+  let p = parseFloat(price) || 0;
+  let orig = parseFloat(origP) || 0;
+  let disc = parseFloat(discP) || 0;
+
+  if (orig > 0 && orig <= 99 && !disc) {
+    disc = orig;
+    orig = Math.round(p / (1 - (disc / 100)));
+  } else if (orig > 0 && orig < p && (orig * 10) > p) {
+    orig = orig * 10;
+  }
+
+  if (orig > p && !disc) {
+    disc = Math.round(((orig - p) / orig) * 100);
+  } else if (disc > 0 && (!orig || orig <= p)) {
+    orig = Math.round(p / (1 - (disc / 100)));
+  }
+
+  return { originalPrice: orig, discountPercentage: disc };
+}
+
+// @desc    إضافة منتج/بضاعة جديدة لمحل معين (خاص بالمسؤول)
+// @route   POST /api/shops/:shopId/products
 router.post('/:shopId/products', async (req, res) => {
   try {
     const { name, description, price, originalPrice, discountPercentage, category, imagePath, rating } = req.body;
@@ -158,14 +181,7 @@ router.post('/:shopId/products', async (req, res) => {
 
     const resolvedImagePath = saveBase64Image(imagePath, req);
     const parsedPrice = parseFloat(price) || 0;
-    let origP = originalPrice ? parseFloat(originalPrice) : 0;
-    let discP = discountPercentage ? parseFloat(discountPercentage) : 0;
-
-    if (origP > parsedPrice && !discP) {
-      discP = Math.round(((origP - parsedPrice) / origP) * 100);
-    } else if (discP > 0 && (!origP || origP <= parsedPrice)) {
-      origP = Math.round(parsedPrice / (1 - (discP / 100)));
-    }
+    const { originalPrice: origP, discountPercentage: discP } = normalizeDiscount(parsedPrice, originalPrice, discountPercentage);
 
     const product = new Product({
       shop: req.params.shopId,
@@ -222,14 +238,13 @@ router.put('/products/:id', async (req, res) => {
     if (name) product.name = name;
     if (description !== undefined) product.description = description;
     if (price !== undefined) product.price = parseFloat(price);
-    if (originalPrice !== undefined) product.originalPrice = parseFloat(originalPrice);
-    if (discountPercentage !== undefined) product.discountPercentage = parseFloat(discountPercentage);
 
-    if (product.originalPrice > product.price && (!product.discountPercentage || product.discountPercentage === 0)) {
-      product.discountPercentage = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
-    } else if (product.discountPercentage > 0 && (!product.originalPrice || product.originalPrice <= product.price)) {
-      product.originalPrice = Math.round(product.price / (1 - (product.discountPercentage / 100)));
-    }
+    const rawOrig = originalPrice !== undefined ? originalPrice : product.originalPrice;
+    const rawDisc = discountPercentage !== undefined ? discountPercentage : product.discountPercentage;
+    const { originalPrice: origP, discountPercentage: discP } = normalizeDiscount(product.price, rawOrig, rawDisc);
+
+    product.originalPrice = origP;
+    product.discountPercentage = discP;
 
     if (isAvailable !== undefined) product.isAvailable = isAvailable;
     if (category) {
