@@ -94,8 +94,8 @@ app.get(/^\/(staff|admin)($|\/.*)/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public/web', 'index.html'));
 });
 
-// توجيه عام للموقع الرئيسي
-app.get('*', (req, res) => {
+// توجيه عام للموقع الرئيسي (توافقية Express 5 الكاملة)
+app.use((req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ success: false, message: 'المسار غير موجود' });
   }
