@@ -380,8 +380,11 @@ router.put('/:id/status', async (req, res) => {
 
     order.status = status;
     
-    if (status === 'picking_up' || status === 'delivering') {
-      if (!order.pickedUpAt) {
+    if (status === 'accepted' || status === 'picking_up' || status === 'delivering') {
+      if (!order.acceptedAt) {
+        order.acceptedAt = Date.now();
+      }
+      if ((status === 'picking_up' || status === 'delivering') && !order.pickedUpAt) {
         order.pickedUpAt = Date.now();
       }
     } else if (status === 'completed') {
