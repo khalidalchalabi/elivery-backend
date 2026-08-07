@@ -157,14 +157,23 @@ router.post('/:shopId/products', async (req, res) => {
     }
 
     const resolvedImagePath = saveBase64Image(imagePath, req);
+    const parsedPrice = parseFloat(price) || 0;
+    let origP = originalPrice ? parseFloat(originalPrice) : 0;
+    let discP = discountPercentage ? parseFloat(discountPercentage) : 0;
+
+    if (origP > parsedPrice && !discP) {
+      discP = Math.round(((origP - parsedPrice) / origP) * 100);
+    } else if (discP > 0 && (!origP || origP <= parsedPrice)) {
+      origP = Math.round(parsedPrice / (1 - (discP / 100)));
+    }
 
     const product = new Product({
       shop: req.params.shopId,
       name,
       description,
-      price,
-      originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
-      discountPercentage: discountPercentage ? parseFloat(discountPercentage) : 0,
+      price: parsedPrice,
+      originalPrice: origP,
+      discountPercentage: discP,
       category,
       imagePath: resolvedImagePath,
       rating,
@@ -215,6 +224,13 @@ router.put('/products/:id', async (req, res) => {
     if (price !== undefined) product.price = parseFloat(price);
     if (originalPrice !== undefined) product.originalPrice = parseFloat(originalPrice);
     if (discountPercentage !== undefined) product.discountPercentage = parseFloat(discountPercentage);
+
+    if (product.originalPrice > product.price && (!product.discountPercentage || product.discountPercentage === 0)) {
+      product.discountPercentage = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
+    } else if (product.discountPercentage > 0 && (!product.originalPrice || product.originalPrice <= product.price)) {
+      product.originalPrice = Math.round(product.price / (1 - (product.discountPercentage / 100)));
+    }
+
     if (isAvailable !== undefined) product.isAvailable = isAvailable;
     if (category) {
       product.category = category;
