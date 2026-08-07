@@ -71,7 +71,9 @@ app.get('/daqeqa-customer.apk', (req, res) => {
 // تقديم ملفات التحميل المباشر والملفات العامة (APKs)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// تقديم موقع الكادر (Flutter Web) من المجلد الرئيسي
+// تقديم موقع الكادر لوحة التحكم (Flutter Web)
+app.use('/staff', express.static(path.join(__dirname, 'public/web')));
+app.use('/admin', express.static(path.join(__dirname, 'public/web')));
 app.use(express.static(path.join(__dirname, 'public/web')));
 
 // المسارات (Routes)
