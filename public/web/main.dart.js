@@ -115158,23 +115158,28 @@ if(s.b!=null)n.push(A.cg(B.adK,new A.aPf(p,a,s.c),A.HG(r,r,r,r,r,r,r,r,r,B.W,r,r
 return A.cX(A.dg(n,o,r,new A.au(q,B.n),B.acQ,r),B.P)},
 $S:14}
 A.aPd.prototype={
-$2(a,b){var s,r,q,p,o,n,m,l,k=null,j=this.a,i=J.u(j.e,b),h=J.Z(i),g=h.h(i,"_id")
-if(g==null)g=""
-s=h.h(i,"name")
+$2(a,b){var s,r,q,p,o,n,m,l,k,j,i,h=null,g=this.a,f=J.u(g.e,b),e=J.Z(f),d=e.h(f,"_id")
+if(d==null)d=""
+s=e.h(f,"name")
 if(s==null)s=""
-r=h.h(i,"phone")
+r=e.h(f,"phone")
 if(r==null)r=""
-h=h.h(i,"driverDetails")
-q=J.c(h==null?k:J.u(h,"isAvailable"),!0)
-p=J.c(g,this.b)
-h=A.W(12)
-o=q?B.hU:B.fp
-o=A.fL(o,A.dd(B.nQ,q?B.A:B.W,k,k),k)
-n=A.C(s,k,k,k,k,B.e7,k,k,k)
-m=A.h(r)
-l=q?"\u0645\u062a\u0627\u062d \ud83d\udfe2":"\u0645\u0634\u063a\u0648\u0644 \ud83d\udd34"
-l=A.C("\u0647\u0627\u062a\u0641: "+m+"\n\u0627\u0644\u062d\u0627\u0644\u0629: "+l,k,k,k,k,k,k,k,k)
-return A.cz(A.eR(!1,k,k,k,!0,k,k,k,!0,k,o,k,k,k,k,k,!1,k,k,k,l,k,n,p?B.SE:A.dK(B.aea,new A.aPc(j,a,this.c,g),A.bF(k,k,B.q,k,k,k,k,k,k,B.f,k,k,k,k,new A.au(A.W(8),B.n),k,k,k,k,k)),k),k,k,k,B.ex,new A.au(h,B.n))},
+q=e.h(f,"driverDetails")
+if(q==null){e=t.z
+q=A.A(e,e)}e=J.Z(q)
+p=J.c(e.h(q,"isAvailable"),!0)
+o=J.c(e.h(q,"isBusy"),!0)
+n=J.c(e.h(q,"isOffline"),!0)
+if(o)m="\u0645\u0634\u063a\u0648\u0644 \u0628\u0637\u0644\u0628 \ud83d\udd34"
+else if(n)m="\u0627\u0644\u062a\u0637\u0628\u064a\u0642 \u0645\u063a\u0644\u0642 / \u0623\u0648\u0641\u0644\u0627\u064a\u0646 \ud83d\udd34"
+else m=!p?"\u063a\u064a\u0631 \u0645\u062a\u0627\u062d \ud83d\udd34":"\u0645\u062a\u0627\u062d \ud83d\udfe2"
+l=J.c(d,this.b)
+e=A.W(12)
+k=p?B.hU:B.fp
+k=A.fL(k,A.dd(B.nQ,p?B.A:B.W,h,h),h)
+j=A.C(s,h,h,h,h,B.e7,h,h,h)
+i=A.C("\u0647\u0627\u062a\u0641: "+A.h(r)+"\n\u0627\u0644\u062d\u0627\u0644\u0629: "+m,h,h,h,h,h,h,h,h)
+return A.cz(A.eR(!1,h,h,h,!0,h,h,h,!0,h,k,h,h,h,h,h,!1,h,h,h,i,h,j,l?B.SE:A.dK(B.aea,new A.aPc(g,a,this.c,d),A.bF(h,h,B.q,h,h,h,h,h,h,B.f,h,h,h,h,new A.au(A.W(8),B.n),h,h,h,h,h)),h),h,h,h,B.ex,new A.au(e,B.n))},
 $S:37}
 A.aPc.prototype={
 $0(){var s=0,r=A.q(t.H),q=1,p=[],o=this,n,m,l,k,j,i,h

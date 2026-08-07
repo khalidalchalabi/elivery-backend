@@ -213,6 +213,8 @@ router.put('/driver/location/:id', async (req, res) => {
       };
     }
 
+    user.driverDetails.lastActiveAt = new Date();
+
     if (typeof isAvailable !== 'undefined') {
       user.driverDetails.isAvailable = isAvailable;
     }
@@ -229,12 +231,45 @@ router.put('/driver/location/:id', async (req, res) => {
   }
 });
 
-// @desc    جلب جميع السائقين
+// @desc    جلب جميع السائقين وحساب حالة تفرغهم اللحظية بدقة (متاح / مشغول / أوفلاين)
 // @route   GET /api/auth/drivers
 router.get('/drivers', async (req, res) => {
   try {
-    const drivers = await User.find({ role: 'driver' }).select('-password');
-    res.json({ success: true, data: drivers });
+    const Order = require('../models/Order');
+    const drivers = await User.find({ role: 'driver' }).select('-password').lean();
+    
+    // جلب الطلبات النشطة حالياً التي يعمل عليها كباتن التوصيل
+    const activeOrders = await Order.find({ status: { $in: ['accepted', 'picking_up', 'delivering'] }, driver: { $ne: null } }).select('driver').lean();
+    const busyDriverIds = new Set(activeOrders.map(o => o.driver.toString()));
+
+    const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
+
+    const calculatedDrivers = drivers.map(driver => {
+      const driverIdStr = driver._id.toString();
+      const details = driver.driverDetails || {};
+      
+      const isExplicitAvailable = details.isAvailable !== false;
+      const isBusyWithOrder = busyDriverIds.has(driverIdStr);
+      
+      // التثبت من نشاط التطبيق (أن الموقع أو النشاط حدث خلال آخر 3 دقائق)
+      const lastActive = details.lastActiveAt ? new Date(details.lastActiveAt) : (driver.updatedAt ? new Date(driver.updatedAt) : null);
+      const isRecentlyActive = lastActive ? lastActive >= threeMinutesAgo : false;
+
+      // السائق متاح فعلياً فقط إذا كان قد فعل التوفر + ليس لديه طلب نشط + التطبيق كان مفتوحاً ونشطاً
+      const realIsAvailable = isExplicitAvailable && !isBusyWithOrder && isRecentlyActive;
+
+      return {
+        ...driver,
+        driverDetails: {
+          ...details,
+          isAvailable: realIsAvailable,
+          isBusy: isBusyWithOrder,
+          isOffline: !isRecentlyActive,
+        }
+      };
+    });
+
+    res.json({ success: true, data: calculatedDrivers });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
