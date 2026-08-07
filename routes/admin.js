@@ -64,14 +64,108 @@ router.get('/top-customers', async (req, res) => {
         $project: {
           name: 1,
           phone: 1,
+          email: 1,
+          createdAt: 1,
           totalOrders: { $size: '$completedOrders' },
-          totalSpent: { $sum: '$completedOrders.totalPaid' }
+          totalSpent: { $sum: '$completedOrders.priceDetails.totalPrice' }
         }
       },
       { $sort: { totalOrders: -1, totalSpent: -1 } },
       { $limit: 50 } // نجلب أفضل 50 زبون فقط
     ]);
     res.status(200).json({ success: true, data: customers });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب قائمة جميع الزبائن مع إحصائياتهم المالية والطلبات
+// @route   GET /api/admin/customers-list
+router.get('/customers-list', async (req, res) => {
+  try {
+    const customers = await User.find({ role: 'customer' }).sort({ createdAt: -1 }).select('-password');
+    const orders = await Order.find({ customer: { $in: customers.map(c => c._id) } });
+
+    const customersWithStats = customers.map(c => {
+      const custOrders = orders.filter(o => o.customer && o.customer.toString() === c._id.toString());
+      const completed = custOrders.filter(o => o.status === 'completed');
+      const cancelled = custOrders.filter(o => o.status === 'cancelled');
+      let spent = 0;
+      completed.forEach(o => {
+        spent += (o.priceDetails?.totalPrice || o.totalPaid || ((o.priceDetails?.itemsPrice || 0) + (o.priceDetails?.deliveryFee || 0)) || 0);
+      });
+
+      return {
+        _id: c._id,
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        createdAt: c.createdAt,
+        isActive: c.isActive,
+        totalOrdersCount: custOrders.length,
+        completedOrdersCount: completed.length,
+        cancelledOrdersCount: cancelled.length,
+        totalSpent: spent,
+        completionRate: custOrders.length > 0 ? Math.round((completed.length / custOrders.length) * 100) : 100,
+      };
+    });
+
+    res.status(200).json({ success: true, count: customersWithStats.length, data: customersWithStats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب البروفايل الإحصائي والمالي الشامل لزبون معين
+// @route   GET /api/admin/customer-profile/:id
+router.get('/customer-profile/:id', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    let customer = await User.findById(userId).select('-password');
+    if (!customer) {
+      // البحث برقم الهاتف إذا لم يكن ID
+      customer = await User.findOne({ phone: userId, role: 'customer' }).select('-password');
+    }
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'الزبون غير موجود' });
+    }
+
+    const orders = await Order.find({ customer: customer._id })
+      .populate('shop', 'name imagePath')
+      .populate('driver', 'name phone')
+      .sort({ createdAt: -1 });
+
+    const totalOrdersCount = orders.length;
+    const completedOrders = orders.filter(o => o.status === 'completed');
+    const completedOrdersCount = completedOrders.length;
+    const cancelledOrdersCount = orders.filter(o => o.status === 'cancelled').length;
+    const inProgressOrdersCount = orders.filter(o => ['pending', 'preparing', 'ready', 'accepted', 'picking_up', 'delivering'].includes(o.status)).length;
+
+    let totalSpent = 0;
+    completedOrders.forEach(o => {
+      totalSpent += (o.priceDetails?.totalPrice || o.totalPaid || ((o.priceDetails?.itemsPrice || 0) + (o.priceDetails?.deliveryFee || 0)) || 0);
+    });
+
+    const averageOrderValue = completedOrdersCount > 0 ? Math.round(totalSpent / completedOrdersCount) : 0;
+    const completionRate = totalOrdersCount > 0 ? Math.round((completedOrdersCount / totalOrdersCount) * 100) : 100;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        customer,
+        stats: {
+          totalOrdersCount,
+          completedOrdersCount,
+          cancelledOrdersCount,
+          inProgressOrdersCount,
+          totalSpent,
+          averageOrderValue,
+          completionRate,
+          customerRating: 4.9,
+        },
+        recentOrders: orders.slice(0, 20),
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
