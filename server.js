@@ -53,11 +53,19 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); // زيادة الحد لتحميل صور base64
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// المسارات (Routes)
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/orders', require('./routes/orders'));
+app.use('/api/shops', require('./routes/shops'));
+app.use('/api/ads', require('./routes/ads'));
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/promo', require('./routes/promo'));
+app.use('/api/categories', require('./routes/categories'));
+app.use('/api/settings', require('./routes/settings'));
+
 // خدمة الملفات المرفوعة بشكل استاتيكي
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
-
-// تقديم موقع الزبون (Flutter Web)
-app.use('/customer', express.static(path.join(__dirname, 'public/customer')));
 
 // مسارات التحميل المباشر لملفات الـ APK
 app.get('/daqeqa-staff.apk', (req, res) => {
@@ -71,35 +79,27 @@ app.get('/daqeqa-customer.apk', (req, res) => {
 // تقديم ملفات التحميل المباشر والملفات العامة (APKs)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// تقديم موقع الكادر لوحة التحكم (Flutter Web)
-app.use('/staff', express.static(path.join(__dirname, 'public/web')));
-app.use('/admin', express.static(path.join(__dirname, 'public/web')));
-app.use(express.static(path.join(__dirname, 'public/web')));
-
-// المسارات (Routes)
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/orders', require('./routes/orders'));
-app.use('/api/shops', require('./routes/shops'));
-app.use('/api/ads', require('./routes/ads'));
-app.use('/api/messages', require('./routes/messages'));
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/promo', require('./routes/promo'));
-app.use('/api/categories', require('./routes/categories'));
-app.use('/api/settings', require('./routes/settings'));
-
-// اختبار تشغيل الخادم
-app.get('/', (req, res) => {
-  res.json({ message: 'مرحباً بك في الخلفية البرمجية لتطبيق التوصيل!' });
-});
-
-// التوجيه لدعم روابط SPA لتطبيق الزبون (باستخدام RegExp لتفادي أخطاء المترجم)
+// تقديم موقع الزبون (Flutter Web)
+app.use('/customer', express.static(path.join(__dirname, 'public/customer')));
 app.get(/^\/customer($|\/.*)/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public/customer', 'index.html'));
 });
 
-// التعامل مع المسارات غير الموجودة (404)
-app.use((req, res, next) => {
-  res.status(404).json({ success: false, message: 'المسار غير موجود' });
+// تقديم موقع الكادر لوحة التحكم (Flutter Web) عند / أو /staff أو /admin
+app.use('/staff', express.static(path.join(__dirname, 'public/web')));
+app.use('/admin', express.static(path.join(__dirname, 'public/web')));
+app.use(express.static(path.join(__dirname, 'public/web')));
+
+app.get(/^\/(staff|admin)($|\/.*)/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/web', 'index.html'));
+});
+
+// توجيه عام للموقع الرئيسي
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ success: false, message: 'المسار غير موجود' });
+  }
+  res.sendFile(path.join(__dirname, 'public/web', 'index.html'));
 });
 
 // معالج الأخطاء العام
