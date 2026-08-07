@@ -149,7 +149,7 @@ router.get('/:shopId/products', async (req, res) => {
 // @route   POST /api/shops/:shopId/products
 router.post('/:shopId/products', async (req, res) => {
   try {
-    const { name, description, price, category, imagePath, rating } = req.body;
+    const { name, description, price, originalPrice, discountPercentage, category, imagePath, rating } = req.body;
 
     const shop = await Shop.findById(req.params.shopId);
     if (!shop) {
@@ -163,6 +163,8 @@ router.post('/:shopId/products', async (req, res) => {
       name,
       description,
       price,
+      originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
+      discountPercentage: discountPercentage ? parseFloat(discountPercentage) : 0,
       category,
       imagePath: resolvedImagePath,
       rating,
@@ -202,7 +204,7 @@ router.delete('/products/:id', async (req, res) => {
 // @route   PUT /api/shops/products/:id
 router.put('/products/:id', async (req, res) => {
   try {
-    const { name, description, price, category, imagePath, isAvailable } = req.body;
+    const { name, description, price, originalPrice, discountPercentage, category, imagePath, isAvailable } = req.body;
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'المنتج غير موجود' });
@@ -210,7 +212,9 @@ router.put('/products/:id', async (req, res) => {
 
     if (name) product.name = name;
     if (description !== undefined) product.description = description;
-    if (price !== undefined) product.price = price;
+    if (price !== undefined) product.price = parseFloat(price);
+    if (originalPrice !== undefined) product.originalPrice = parseFloat(originalPrice);
+    if (discountPercentage !== undefined) product.discountPercentage = parseFloat(discountPercentage);
     if (isAvailable !== undefined) product.isAvailable = isAvailable;
     if (category) {
       product.category = category;

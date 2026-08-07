@@ -37,6 +37,14 @@ const ProductSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    originalPrice: {
+      type: Number,
+      default: 0,
+    },
+    discountPercentage: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

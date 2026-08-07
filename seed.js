@@ -233,10 +233,8 @@ const seedDB = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log('MongoDB connected for seeding shops & users...');
 
-    // مسح المحلات والمنتجات القديمة
-    await Shop.deleteMany({});
-    await Product.deleteMany({});
-    console.log('Old shops and products cleared.');
+    // عدم مسح المحلات الموجودة أبداً حتى لا تضيع محلات المستخدم
+    console.log('Preserving existing shops and products...');
 
     // مسح الحسابات القديمة المماثلة للتأكيد (حسب البريد الإلكتروني أو الهاتف)
     await User.deleteMany({ 
