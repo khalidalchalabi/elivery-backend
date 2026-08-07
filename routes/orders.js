@@ -45,8 +45,8 @@ router.get('/', async (req, res) => {
       .sort({ createdAt: -1 });
 
     // جلب جميع هواتف التجار في استعلام واحد لتجنب الضغط على قاعدة البيانات
-    const shopIds = orders.map(o => o.shop && o.shop._id).filter(Boolean);
-    const merchants = await User.find({ role: 'merchant', shop: { $in: shopIds } }).select('phone shop').lean();
+    const shopIds = orders.map(o => o.shop && (o.shop._id || o.shop)).filter(Boolean);
+    const merchants = await User.find({ shop: { $in: shopIds } }).select('phone shop role').lean();
     const merchantPhoneMap = {};
     merchants.forEach(m => {
       if (m.shop) {
@@ -56,8 +56,9 @@ router.get('/', async (req, res) => {
 
     const ordersWithMerchant = orders.map((order) => {
       let merchantPhone = null;
-      if (order.shop && order.shop._id) {
-        merchantPhone = merchantPhoneMap[order.shop._id.toString()] || null;
+      if (order.shop) {
+        const sId = (order.shop._id || order.shop).toString();
+        merchantPhone = merchantPhoneMap[sId] || (order.shop && order.shop.phone) || null;
       }
       return {
         ...order,
