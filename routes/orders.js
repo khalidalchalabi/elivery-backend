@@ -37,9 +37,9 @@ router.get('/', async (req, res) => {
     }
 
     const orders = await Order.find(query)
-      .populate('customer', 'name phone')
-      .populate('driver', 'name phone')
-      .populate('shop', 'name location')
+      .populate('customer', 'name phone email createdAt')
+      .populate('driver', 'name phone driverDetails profilePicture')
+      .populate('shop', 'name imagePath deliveryFee description location')
       .limit(parseInt(limit))
       .lean()
       .sort({ createdAt: -1 });
