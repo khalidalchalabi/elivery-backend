@@ -247,6 +247,45 @@ router.get('/dashboard/stats', async (req, res) => {
 
 // @desc    جلب تفاصيل طلب معين
 // @route   GET /api/orders/:id
+// @desc    فحص هل يحتاج الزبون لتقييم المحل أو السائق (أول مرة فقط لكل منهما)
+// @route   GET /api/orders/check-rating-eligibility
+router.get('/check-rating-eligibility', async (req, res) => {
+  try {
+    const { customerId, shopId, driverId } = req.query;
+
+    let needsShopRating = false;
+    let needsDriverRating = false;
+
+    if (customerId && shopId) {
+      const existingShopRating = await Order.findOne({
+        customer: customerId,
+        shop: shopId,
+        shopRating: { $ne: null }
+      });
+      needsShopRating = !existingShopRating;
+    }
+
+    if (customerId && driverId) {
+      const existingDriverRating = await Order.findOne({
+        customer: customerId,
+        driver: driverId,
+        driverRating: { $ne: null }
+      });
+      needsDriverRating = !existingDriverRating;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        needsShopRating,
+        needsDriverRating,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -442,44 +481,7 @@ router.get('/nearby/pending', async (req, res) => {
   }
 });
 
-// @desc    فحص هل يحتاج الزبون لتقييم المحل أو السائق (أول مرة فقط لكل منهما)
-// @route   GET /api/orders/check-rating-eligibility
-router.get('/check-rating-eligibility', async (req, res) => {
-  try {
-    const { customerId, shopId, driverId } = req.query;
 
-    let needsShopRating = false;
-    let needsDriverRating = false;
-
-    if (customerId && shopId) {
-      const existingShopRating = await Order.findOne({
-        customer: customerId,
-        shop: shopId,
-        shopRating: { $ne: null }
-      });
-      needsShopRating = !existingShopRating;
-    }
-
-    if (customerId && driverId) {
-      const existingDriverRating = await Order.findOne({
-        customer: customerId,
-        driver: driverId,
-        driverRating: { $ne: null }
-      });
-      needsDriverRating = !existingDriverRating;
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        needsShopRating,
-        needsDriverRating,
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // @desc    تسجيل تقييم الزبون للمحل و/أو السائق لطلب معين
 // @route   POST /api/orders/:id/rate
