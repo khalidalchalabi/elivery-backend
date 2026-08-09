@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
       // بشكل افتراضي، لتجنب البطء، نجلب الطلبات النشطة فقط والطلب المنجز/الملغي خلال الـ 24 ساعة الماضية
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       query.$or = [
-        { status: { $in: ['pending', 'preparing', 'ready', 'accepted', 'picking_up', 'delivering'] } },
+        { status: { $in: ['awaiting_verification', 'pending', 'preparing', 'ready', 'accepted', 'picking_up', 'delivering'] } },
         { status: { $in: ['completed', 'cancelled'] }, createdAt: { $gte: oneDayAgo } }
       ];
     }
