@@ -121,6 +121,30 @@ const OrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    shopRating: {
+      type: Number,
+      default: null,
+    },
+    driverRating: {
+      type: Number,
+      default: null,
+    },
+    shopComment: {
+      type: String,
+      default: '',
+    },
+    driverComment: {
+      type: String,
+      default: '',
+    },
+    shopRatedAt: {
+      type: Date,
+      default: null,
+    },
+    driverRatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -314,27 +314,40 @@ router.get('/drivers/nearby', async (req, res) => {
 // @route   POST /api/auth/employee
 router.post('/employee', async (req, res) => {
   try {
-    const { name, email, password, phone, role, driverDetails, shopId } = req.body;
+    const { name, email, password, phone, role, driverDetails, shopId, address, profilePicture, avatar } = req.body;
 
     const allowedRoles = ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'];
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ success: false, message: 'دور الموظف غير صالح. يجب أن يكون سائق، مسؤول، مالك، محاسب، موظف دعم أو صاحب متجر' });
     }
 
-    let userExists = await User.findOne({ email });
+    const finalEmail = (email && email.trim()) ? email.trim() : `${role}_${phone}_${Date.now()}@local.com`;
+
+    let userExists = await User.findOne({
+      $or: [{ phone }, { email: finalEmail }]
+    });
     if (userExists) {
-      return res.status(400).json({ success: false, message: 'هذا البريد الإلكتروني مسجل بالفعل' });
+      return res.status(400).json({ success: false, message: 'رقم الهاتف أو البريد الإلكتروني مسجل بالفعل' });
     }
+
+    const driverAddr = address || driverDetails?.address || '';
+    const driverAvatar = profilePicture || avatar || driverDetails?.avatar || null;
 
     const user = new User({
       name,
-      email,
+      email: finalEmail,
       password,
       phone,
       role,
+      profilePicture: driverAvatar,
       driverDetails: role === 'driver' ? {
         vehicleType: driverDetails?.vehicleType || 'motorcycle',
         plateNumber: driverDetails?.plateNumber || '',
+        address: driverAddr,
+        avatar: driverAvatar,
+        rating: 5.0,
+        numReviews: 0,
+        ratingSum: 0,
         isAvailable: true,
         currentLocation: { type: 'Point', coordinates: [0, 0] }
       } : undefined,
@@ -354,11 +367,32 @@ router.post('/employee', async (req, res) => {
 // @route   PUT /api/auth/employee/:id
 router.put('/employee/:id', async (req, res) => {
   try {
-    const { name, email, phone, role, isActive, shopId } = req.body;
+    const { name, email, phone, role, isActive, shopId, address, profilePicture, avatar } = req.body;
     const user = await User.findById(req.params.id);
     if (!user || user.role === 'customer') {
       return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
     }
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (phone) user.phone = phone;
+    if (role) user.role = role;
+    if (typeof isActive !== 'undefined') user.isActive = isActive;
+    if (shopId) user.shop = shopId;
+
+    const driverAvatar = profilePicture || avatar;
+    if (driverAvatar) {
+      user.profilePicture = driverAvatar;
+    }
+
+    if (user.role === 'driver') {
+      if (!user.driverDetails) user.driverDetails = {};
+      if (address) user.driverDetails.address = address;
+      if (driverAvatar) user.driverDetails.avatar = driverAvatar;
+    }
+
+    await user.save();
+    res.status(200).json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح', data: user });
 
     const originalRole = user.role;
     const originalActive = user.isActive;

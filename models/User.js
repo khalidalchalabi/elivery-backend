@@ -50,11 +50,28 @@ const UserSchema = new mongoose.Schema(
     driverDetails: {
       vehicleType: {
         type: String,
-        enum: ['car', 'motorcycle', 'bicycle', 'truck'],
+        default: 'motorcycle',
       },
       plateNumber: {
         type: String,
         trim: true,
+      },
+      address: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      rating: {
+        type: Number,
+        default: 5.0,
+      },
+      numReviews: {
+        type: Number,
+        default: 0,
+      },
+      ratingSum: {
+        type: Number,
+        default: 0,
       },
       isAvailable: {
         type: Boolean,

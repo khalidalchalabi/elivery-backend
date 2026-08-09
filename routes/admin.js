@@ -511,4 +511,75 @@ router.get('/business/metrics', async (req, res) => {
   }
 });
 
+// @desc    جلب البروفايل الإحصائي الشامل والطلبات المنجزة والمقبولة لسائق معين
+// @route   GET /api/admin/driver-profile/:id
+router.get('/driver-profile/:id', async (req, res) => {
+  try {
+    const driverId = req.params.id;
+    let driver = null;
+
+    if (mongoose.Types.ObjectId.isValid(driverId)) {
+      driver = await User.findById(driverId).select('-password');
+    }
+    if (!driver) {
+      driver = await User.findOne({
+        $or: [{ phone: driverId }, { name: driverId }],
+        role: 'driver'
+      }).select('-password');
+    }
+
+    if (!driver || driver.role !== 'driver') {
+      return res.status(404).json({ success: false, message: 'السائق غير موجود' });
+    }
+
+    const orders = await Order.find({
+      $or: [
+        { driver: driver._id },
+        { driver: driver._id.toString() }
+      ]
+    })
+      .populate('customer', 'name phone')
+      .populate('shop', 'name imagePath')
+      .sort({ createdAt: -1 });
+
+    const acceptedOrdersCount = orders.filter(o => ['accepted', 'picking_up', 'delivering', 'completed'].includes(o.status)).length;
+    const completedOrdersCount = orders.filter(o => o.status === 'completed' || o.status === 'delivered').length;
+    const cancelledOrdersCount = orders.filter(o => o.status === 'cancelled').length;
+
+    let totalDeliveryFeeEarned = 0;
+    orders.filter(o => o.status === 'completed' || o.status === 'delivered').forEach(o => {
+      totalDeliveryFeeEarned += (o.priceDetails?.deliveryFee || 0) * 0.8;
+    });
+
+    const ratedOrders = orders.filter(o => o.driverRating != null);
+    let avgRating = driver.driverDetails?.rating || 5.0;
+    let numReviews = driver.driverDetails?.numReviews || 0;
+    if (ratedOrders.length > 0) {
+      const sum = ratedOrders.reduce((acc, curr) => acc + (curr.driverRating || 0), 0);
+      avgRating = Number((sum / ratedOrders.length).toFixed(1));
+      numReviews = ratedOrders.length;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        driver,
+        stats: {
+          totalOrdersCount: orders.length,
+          acceptedOrdersCount,
+          completedOrdersCount,
+          cancelledOrdersCount,
+          totalDeliveryFeeEarned,
+          rating: avgRating,
+          numReviews,
+        },
+        orders,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
+

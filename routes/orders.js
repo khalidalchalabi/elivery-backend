@@ -251,7 +251,7 @@ router.get('/:id', async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate('customer', 'name phone email')
-      .populate('driver', 'name phone driverDetails.vehicleType driverDetails.plateNumber driverDetails.currentLocation')
+      .populate('driver', 'name phone profilePicture avatar driverDetails')
       .populate('shop', 'name categories');
 
     if (!order) {
@@ -442,4 +442,150 @@ router.get('/nearby/pending', async (req, res) => {
   }
 });
 
+// @desc    فحص هل يحتاج الزبون لتقييم المحل أو السائق (أول مرة فقط لكل منهما)
+// @route   GET /api/orders/check-rating-eligibility
+router.get('/check-rating-eligibility', async (req, res) => {
+  try {
+    const { customerId, shopId, driverId } = req.query;
+
+    let needsShopRating = false;
+    let needsDriverRating = false;
+
+    if (customerId && shopId) {
+      const existingShopRating = await Order.findOne({
+        customer: customerId,
+        shop: shopId,
+        shopRating: { $ne: null }
+      });
+      needsShopRating = !existingShopRating;
+    }
+
+    if (customerId && driverId) {
+      const existingDriverRating = await Order.findOne({
+        customer: customerId,
+        driver: driverId,
+        driverRating: { $ne: null }
+      });
+      needsDriverRating = !existingDriverRating;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        needsShopRating,
+        needsDriverRating,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    تسجيل تقييم الزبون للمحل و/أو السائق لطلب معين
+// @route   POST /api/orders/:id/rate
+router.post('/:id/rate', async (req, res) => {
+  try {
+    const { shopRating, driverRating, shopComment, driverComment } = req.body;
+    const Shop = require('../models/Shop');
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+    }
+
+    let shopUpdated = false;
+    let driverUpdated = false;
+
+    // 1. تقييم المحل
+    if (shopRating && shopRating >= 1 && shopRating <= 5) {
+      order.shopRating = Number(shopRating);
+      order.shopComment = shopComment || '';
+      order.shopRatedAt = new Date();
+      shopUpdated = true;
+
+      if (order.shop) {
+        const shop = await Shop.findById(order.shop);
+        if (shop) {
+          if (!shop.numReviews) {
+            const initialRating = shop.rating || 4.5;
+            shop.numReviews = 10;
+            shop.ratingSum = parseFloat((initialRating * 10).toFixed(1));
+          }
+          shop.numReviews += 1;
+          shop.ratingSum += Number(shopRating);
+          shop.rating = parseFloat((shop.ratingSum / shop.numReviews).toFixed(1));
+          await shop.save();
+        }
+      }
+    }
+
+    // 2. تقييم السائق
+    if (driverRating && driverRating >= 1 && driverRating <= 5) {
+      order.driverRating = Number(driverRating);
+      order.driverComment = driverComment || '';
+      order.driverRatedAt = new Date();
+      driverUpdated = true;
+
+      if (order.driver) {
+        const driver = await User.findById(order.driver);
+        if (driver && driver.role === 'driver') {
+          if (!driver.driverDetails) driver.driverDetails = {};
+          let numRev = driver.driverDetails.numReviews || 0;
+          let rSum = driver.driverDetails.ratingSum || 0;
+
+          if (numRev === 0) {
+            numRev = 5;
+            rSum = 25.0; // البداية بـ 5 تقييمات بمعدل 5 نجوم
+          }
+
+          numRev += 1;
+          rSum += Number(driverRating);
+          driver.driverDetails.numReviews = numRev;
+          driver.driverDetails.ratingSum = rSum;
+          driver.driverDetails.rating = parseFloat((rSum / numRev).toFixed(1));
+          await driver.save();
+        }
+      }
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حفظ تقييمك بنجاح. شكراً لك!',
+      data: order
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب كافة التقييمات والأرشيف للطلبات (خاص بالدعم الفني والمالك والإدارة)
+// @route   GET /api/orders/ratings/all
+router.get('/ratings/all', async (req, res) => {
+  try {
+    const ratedOrders = await Order.find({
+      $or: [
+        { shopRating: { $ne: null } },
+        { driverRating: { $ne: null } },
+        { status: { $in: ['completed', 'delivered', 'cancelled'] } }
+      ]
+    })
+      .populate('customer', 'name phone')
+      .populate('driver', 'name phone profilePicture avatar driverDetails')
+      .populate('shop', 'name imagePath rating')
+      .sort({ updatedAt: -1 })
+      .limit(100);
+
+    res.status(200).json({
+      success: true,
+      count: ratedOrders.length,
+      data: ratedOrders
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
+
