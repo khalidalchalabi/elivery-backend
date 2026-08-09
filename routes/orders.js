@@ -77,7 +77,7 @@ router.get('/', async (req, res) => {
 router.get('/shop/:shopId', async (req, res) => {
   try {
     const { limit = 50 } = req.query;
-    const orders = await Order.find({ shop: req.params.shopId })
+    const orders = await Order.find({ shop: req.params.shopId, status: { $ne: 'awaiting_verification' } })
       .populate('customer', 'name phone')
       .populate('driver', 'name phone')
       .limit(parseInt(limit))
@@ -156,9 +156,13 @@ router.post('/', async (req, res) => {
     const deliveryFeeNum = parseFloat(deliveryFee);
     const totalPrice = itemsPriceNum + deliveryFeeNum - discount;
 
+    const completedOrders = await Order.countDocuments({ customer: finalCustomerId, status: 'completed' });
+    const isFirstOrder = completedOrders === 0;
+
     // إنشاء الطلب بالاحداثيات الجغرافية
     const order = new Order({
       customer: finalCustomerId,
+      status: isFirstOrder ? 'awaiting_verification' : 'pending',
       items,
       pickupLocation: {
         type: 'Point',
@@ -344,6 +348,30 @@ router.put('/:id/assign-driver', async (req, res) => {
 
     await order.save();
     res.status(200).json({ success: true, message: 'تم تعيين السائق للطلب بنجاح', data: order });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    تأكيد الطلب للزبون الجديد (بواسطة الدعم الفني)
+// @route   PUT /api/orders/:id/verify
+router.put('/:id/verify', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+    }
+    if (order.status !== 'awaiting_verification') {
+      return res.status(400).json({ success: false, message: 'هذا الطلب تم تأكيده مسبقاً أو أنه في حالة أخرى' });
+    }
+    order.status = 'pending';
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تأكيد الطلب بنجاح وإرساله للمتجر',
+      data: order,
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

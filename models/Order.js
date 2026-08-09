@@ -27,6 +27,7 @@ const OrderSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
+        'awaiting_verification', // بانتظار التحقق من الزبون الجديد
         'pending',     // بانتظار قبول السائق أو المحل
         'preparing',   // الطلب قيد التجهيز داخل المحل
         'ready',       // تم التجهيز وبانتظار السائق استلامه

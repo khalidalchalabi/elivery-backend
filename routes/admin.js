@@ -582,5 +582,29 @@ router.get('/driver-profile/:id', async (req, res) => {
   }
 });
 
+// @desc    حذف حساب زبون بالكامل (مع طلباته الوهمية إن وجدت)
+// @route   DELETE /api/admin/customer/:id
+router.delete('/customer/:id', async (req, res) => {
+  try {
+    const customer = await User.findById(req.params.id);
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'الزبون غير موجود' });
+    }
+    
+    if (customer.role !== 'customer') {
+      return res.status(400).json({ success: false, message: 'لا يمكن حذف سوى حسابات الزبائن من هذه الواجهة' });
+    }
+
+    // حذف كافة طلبات الزبون أيضاً لمنع بقاء بيانات يتيمة
+    await Order.deleteMany({ customer: customer._id });
+    
+    await User.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({ success: true, message: 'تم حذف حساب الزبون وطلباته بنجاح' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
 
