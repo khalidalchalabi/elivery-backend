@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const User = require('../models/User');
+const { sendPushToUser } = require('../utils/sendPushNotification');
+
+// نصوص إشعارات حالة الطلب بالعربية
+const ORDER_STATUS_NOTIFICATIONS = {
+  preparing: { title: 'طلبك قيد التحضير 👨‍🍳', body: 'المحل بدأ يجهّز طلبك الآن.' },
+  ready: { title: 'طلبك جاهز 📦', body: 'طلبك جاهز وبانتظار استلام السائق له.' },
+  picking_up: { title: 'السائق بالطريق للمحل 🏍️', body: 'السائق ذاهب لاستلام طلبك من المحل.' },
+  delivering: { title: 'طلبك بالطريق إليك 🚀', body: 'السائق استلم طلبك وجاري توصيله لك الآن.' },
+  completed: { title: 'تم توصيل طلبك ✅', body: 'وصلك طلبك بنجاح، بالهنا والشفا!' },
+  cancelled: { title: 'تم إلغاء طلبك ❌', body: 'تم إلغاء طلبك. تواصل معنا لو عندك أي استفسار.' },
+};
 
 // @desc    جلب كافة الطلبات في النظام
 // @route   GET /api/orders
@@ -486,6 +497,14 @@ router.put('/:id/status', async (req, res) => {
       message: `تم تحديث حالة الطلب إلى ${status}`,
       data: order,
     });
+
+    // إرسال إشعار Push للزبون بحالة طلبه الجديدة (بدون تأخير الاستجابة)
+    const notif = ORDER_STATUS_NOTIFICATIONS[status];
+    if (notif && order.customer) {
+      User.findById(order.customer)
+        .then((customer) => sendPushToUser(customer, { ...notif, data: { orderId: order._id.toString(), status } }))
+        .catch(() => {});
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
