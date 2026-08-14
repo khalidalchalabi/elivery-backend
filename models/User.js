@@ -46,6 +46,11 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // رصيد نقاط الولاء (تُمنح عند إكمال الطلبات، وتُستبدل بأكواد خصم)
+    loyaltyPoints: {
+      type: Number,
+      default: 0,
+    },
     // تفاصيل إضافية خاصة بالسائقين فقط
     driverDetails: {
       vehicleType: {

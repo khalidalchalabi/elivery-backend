@@ -110,6 +110,11 @@ const OrderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // منع منح نقاط الولاء أكثر من مرة لنفس الطلب
+    pointsAwarded: {
+      type: Boolean,
+      default: false,
+    },
     acceptedAt: {
       type: Date,
       default: null,
