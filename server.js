@@ -53,6 +53,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); // زيادة الحد لتحميل صور base64
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// [تشخيص مؤقت] معرفة إصدار الكود المنشور فعلياً على السيرفر
+app.get('/api/version', (req, res) => {
+  res.json({ commit: process.env.RENDER_GIT_COMMIT || null, bootedAt: new Date().toISOString() });
+});
+
 // المسارات (Routes)
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/orders', require('./routes/orders'));
