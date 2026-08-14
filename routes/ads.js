@@ -3,6 +3,7 @@ const router = Router = express.Router();
 const Ad = require('../models/Ad');
 const fs = require('fs');
 const path = require('path');
+const { sendPushToTopic } = require('../utils/sendPushNotification');
 
 // دالة مساعدة لحفظ الصورة المرفوعة كـ base64 (نحفظها مباشرة في قاعدة البيانات للعمل على السيرفرات المجانية مثل Render/Vercel)
 function saveBase64Image(base64Str, req) {
@@ -131,6 +132,13 @@ router.post('/', async (req, res) => {
       message: 'تم إضافة الإعلان بنجاح',
       data: ad,
     });
+
+    // إشعار Push لكل الزبائن المشتركين بموضوع العروض (بدون تأخير الاستجابة)
+    sendPushToTopic('promotions', {
+      title: title,
+      body: subtitle || 'عرض جديد بانتظارك، افتح التطبيق واستكشفه الآن!',
+      data: { type: 'ad', adId: ad._id.toString() },
+    }).catch(() => {});
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
