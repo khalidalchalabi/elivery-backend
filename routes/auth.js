@@ -577,6 +577,30 @@ router.get('/users/:id/addresses', async (req, res) => {
   }
 });
 
+// @desc    مزامنة قائمة المحلات المفضلة مع السيرفر (لأجل إشعارات زيادة الخصم)
+// @route   PUT /api/auth/users/:id/favorites
+router.put('/users/:id/favorites', async (req, res) => {
+  try {
+    const { shopIds } = req.body;
+    if (!Array.isArray(shopIds)) {
+      return res.status(400).json({ success: false, message: 'يجب إرسال قائمة معرّفات المحلات' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { favoriteShops: shopIds },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    res.status(200).json({ success: true, message: 'تمت مزامنة المفضلة بنجاح' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    تسجيل/تحديث رمز جهاز الإشعارات (FCM) الخاص بالمستخدم
 // @route   PUT /api/auth/users/:id/fcm-token
 router.put('/users/:id/fcm-token', async (req, res) => {
