@@ -577,6 +577,26 @@ router.get('/users/:id/addresses', async (req, res) => {
   }
 });
 
+// @desc    [تشخيص مؤقت] إرسال إشعار تجريبي فوري ومعرفة سبب الفشل إن وجد
+// @route   POST /api/auth/users/:id/test-push
+router.post('/users/:id/test-push', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+    const { sendPushToUser } = require('../utils/sendPushNotification');
+    const result = await sendPushToUser(user, {
+      title: 'إشعار تجريبي 🔔',
+      body: 'إذا وصلك هذا، الإشعارات شغالة تمام!',
+      data: { test: 'true' },
+    });
+    res.status(200).json({ success: true, hasToken: !!user.fcmToken, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    تسجيل/تحديث رمز جهاز الإشعارات (FCM) الخاص بالمستخدم
 // @route   PUT /api/auth/users/:id/fcm-token
 router.put('/users/:id/fcm-token', async (req, res) => {
