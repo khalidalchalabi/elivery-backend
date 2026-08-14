@@ -468,6 +468,17 @@ router.put('/:id/status', async (req, res) => {
       }
     }
 
+    // منح نقاط ولاء عند اكتمال الطلب: نقطة واحدة لكل 1000 دينار من قيمة الطلب
+    if (status === 'completed' && !order.pointsAwarded && order.customer) {
+      const earnedPoints = Math.floor((order.priceDetails?.totalPrice || 0) / 1000);
+      if (earnedPoints > 0) {
+        await User.findByIdAndUpdate(order.customer, {
+          $inc: { loyaltyPoints: earnedPoints },
+        });
+      }
+      order.pointsAwarded = true;
+    }
+
     await order.save();
 
     res.status(200).json({

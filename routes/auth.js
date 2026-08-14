@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
+const PromoCode = require('../models/PromoCode');
 
 async function logSecurityEvent(userId, username, role, action, details, req) {
   try {
@@ -570,6 +571,70 @@ router.get('/users/:id/addresses', async (req, res) => {
     res.status(200).json({
       success: true,
       data: user.savedAddresses || [],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب رصيد نقاط الولاء الحالي للمستخدم
+// @route   GET /api/auth/users/:id/loyalty-points
+router.get('/users/:id/loyalty-points', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { loyaltyPoints: user.loyaltyPoints || 0 },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    استبدال نقاط الولاء بكود خصم (كل 100 نقطة = 5% خصم، بحد أقصى 25%)
+// @route   POST /api/auth/users/:id/redeem-points
+router.post('/users/:id/redeem-points', async (req, res) => {
+  try {
+    const points = Number(req.body.points);
+
+    if (!points || points < 100 || points % 100 !== 0) {
+      return res.status(400).json({ success: false, message: 'عدد النقاط يجب أن يكون 100 أو مضاعفاتها' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    if ((user.loyaltyPoints || 0) < points) {
+      return res.status(400).json({ success: false, message: 'رصيد النقاط غير كافٍ' });
+    }
+
+    const discountPercentage = Math.min((points / 100) * 5, 25);
+    const code = `LOYAL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // شهر واحد
+
+    const promo = await PromoCode.create({
+      code,
+      discountPercentage,
+      expirationDate,
+      assignedTo: user._id,
+    });
+
+    user.loyaltyPoints -= points;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `تم استبدال ${points} نقطة بكود خصم ${discountPercentage}%`,
+      data: {
+        loyaltyPoints: user.loyaltyPoints,
+        promoCode: promo,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
