@@ -577,6 +577,34 @@ router.get('/users/:id/addresses', async (req, res) => {
   }
 });
 
+// @desc    [تشخيص مؤقت] فحص حالة متغير FIREBASE_SERVICE_ACCOUNT بدون كشف محتواه
+// @route   GET /api/auth/debug/push-config
+router.get('/debug/push-config', async (req, res) => {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  const diagnostics = {
+    envVarSet: !!raw,
+    envVarLength: raw ? raw.length : 0,
+  };
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      diagnostics.validJson = true;
+      diagnostics.hasProjectId = !!parsed.project_id;
+      diagnostics.hasPrivateKey = !!parsed.private_key;
+      diagnostics.hasClientEmail = !!parsed.client_email;
+      diagnostics.projectId = parsed.project_id || null;
+      // فحص شكل المفتاح الخاص (لازم يبدأ ب BEGIN PRIVATE KEY ويحتوي أسطر \n)
+      diagnostics.privateKeyLooksValid = typeof parsed.private_key === 'string' &&
+        parsed.private_key.includes('BEGIN PRIVATE KEY') &&
+        parsed.private_key.includes('\n');
+    } catch (e) {
+      diagnostics.validJson = false;
+      diagnostics.jsonError = e.message;
+    }
+  }
+  res.status(200).json({ success: true, diagnostics });
+});
+
 // @desc    [تشخيص مؤقت] إرسال إشعار تجريبي فوري ومعرفة سبب الفشل إن وجد
 // @route   POST /api/auth/users/:id/test-push
 router.post('/users/:id/test-push', async (req, res) => {
