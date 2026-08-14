@@ -51,6 +51,11 @@ const UserSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // رمز جهاز Firebase Cloud Messaging لإرسال إشعارات Push حقيقية
+    fcmToken: {
+      type: String,
+      default: null,
+    },
     // تفاصيل إضافية خاصة بالسائقين فقط
     driverDetails: {
       vehicleType: {

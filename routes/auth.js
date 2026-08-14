@@ -577,6 +577,30 @@ router.get('/users/:id/addresses', async (req, res) => {
   }
 });
 
+// @desc    تسجيل/تحديث رمز جهاز الإشعارات (FCM) الخاص بالمستخدم
+// @route   PUT /api/auth/users/:id/fcm-token
+router.put('/users/:id/fcm-token', async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    if (!fcmToken) {
+      return res.status(400).json({ success: false, message: 'الرجاء إرسال رمز الجهاز' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { fcmToken },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    res.status(200).json({ success: true, message: 'تم تسجيل رمز الجهاز بنجاح' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    جلب رصيد نقاط الولاء الحالي للمستخدم
 // @route   GET /api/auth/users/:id/loyalty-points
 router.get('/users/:id/loyalty-points', async (req, res) => {
