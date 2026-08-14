@@ -1,4 +1,5 @@
-const { admin, initFirebaseAdmin } = require('../config/firebaseAdmin');
+const { getMessaging } = require('firebase-admin/messaging');
+const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 
 // يرسل إشعار Push لمستخدم واحد عبر رمز جهازه (FCM token) المخزّن على حسابه
 // يفشل بصمت (يسجّل بس بالـ console) بدل ما يوقف أي طلب API، حتى لو Firebase مو مهيّأ
@@ -7,7 +8,7 @@ async function sendPushToUser(user, { title, body, data = {} } = {}) {
     if (!user || !user.fcmToken) return { sent: false, reason: 'no_token' };
     if (!initFirebaseAdmin()) return { sent: false, reason: 'not_configured' };
 
-    await admin.messaging().send({
+    await getMessaging().send({
       token: user.fcmToken,
       notification: { title, body },
       data: Object.fromEntries(
