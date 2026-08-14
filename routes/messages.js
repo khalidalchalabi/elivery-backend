@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Message = require('../models/Message');
 const User = require('../models/User');
+const { sendPushToUser } = require('../utils/sendPushNotification');
 
 // @desc    إرسال رسالة جديدة (سواء من السائق أو الزبون أو الدعم)
 // @route   POST /api/messages
@@ -27,6 +28,17 @@ router.post('/', async (req, res) => {
       message: 'تم إرسال الرسالة بنجاح',
       data: message,
     });
+
+    // إشعار المستخدم بردّ الدعم الفني (بدون تأخير الاستجابة)
+    if (senderRole === 'support') {
+      User.findById(userId)
+        .then((user) => sendPushToUser(user, {
+          title: 'رد جديد من الدعم الفني 💬',
+          body: text.length > 80 ? `${text.substring(0, 80)}...` : text,
+          data: { type: 'support_message' },
+        }))
+        .catch(() => {});
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

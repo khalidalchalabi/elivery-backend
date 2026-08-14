@@ -7,6 +7,7 @@ const PromoCode = require('../models/PromoCode');
 const Ad = require('../models/Ad');
 const Shop = require('../models/Shop');
 const AuditLog = require('../models/AuditLog');
+const { sendPushToUser, sendPushToTopic } = require('../utils/sendPushNotification');
 
 // @desc    جلب إحصائيات لوحة التحكم
 // @route   GET /api/admin/stats
@@ -219,6 +220,24 @@ router.post('/promo', async (req, res) => {
     }
 
     res.status(201).json({ success: true, data: promo });
+
+    // إشعار Push: مباشر للزبون المهدى له، أو بث جماعي لكل الزبائن إذا كان الكوبون عاماً
+    const descText = isFreeDelivery ? 'توصيل مجاني 🚚' : `خصم بقيمة ${discountPercentage}%`;
+    if (assignedTo) {
+      User.findById(assignedTo)
+        .then((user) => sendPushToUser(user, {
+          title: '🎁 هدية خصم خاصة لك!',
+          body: `كود الخصم: ${code} (${descText})`,
+          data: { type: 'promo', code },
+        }))
+        .catch(() => {});
+    } else {
+      sendPushToTopic('promotions', {
+        title: '🎉 كوبون خصم جديد!',
+        body: `استخدم الكود ${code} واحصل على ${descText}`,
+        data: { type: 'promo', code },
+      }).catch(() => {});
+    }
   } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'كود الخصم موجود مسبقاً' });

@@ -56,6 +56,11 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // نسخة على السيرفر من المحلات المفضلة (لإرسال إشعار عند زيادة خصم محل مفضل)
+    favoriteShops: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shop',
+    }],
     // تفاصيل إضافية خاصة بالسائقين فقط
     driverDetails: {
       vehicleType: {

@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
+const User = require('../models/User');
 const fs = require('fs');
 const path = require('path');
+const { sendPushToUser } = require('../utils/sendPushNotification');
 
 function saveBase64Image(base64Str, req) {
   // للعمل على سيرفرات مجانية مثل Vercel، سنحفظ الصورة كنص Base64 مباشرة في قاعدة البيانات
@@ -110,6 +112,8 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
     }
 
+    const previousDiscount = shop.discountPercentage || 0;
+
     if (name) shop.name = name;
     if (description !== undefined) shop.description = description;
     if (imagePath) shop.imagePath = saveBase64Image(imagePath, req);
@@ -129,6 +133,17 @@ router.put('/:id', async (req, res) => {
 
     await shop.save();
     res.status(200).json({ success: true, message: 'تم تحديث بيانات المحل بنجاح', data: shop });
+
+    // إشعار من فضّل هذا المحل عند زيادة نسبة الخصم
+    if (shop.discountPercentage > previousDiscount) {
+      User.find({ favoriteShops: shop._id })
+        .then((users) => Promise.all(users.map((user) => sendPushToUser(user, {
+          title: `خصم جديد بمحلك المفضل ${shop.name} 🎉`,
+          body: `صار عليه خصم ${shop.discountPercentage}% الحين!`,
+          data: { type: 'favorite_shop_discount', shopId: shop._id.toString() },
+        }))))
+        .catch(() => {});
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
