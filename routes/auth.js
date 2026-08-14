@@ -577,54 +577,6 @@ router.get('/users/:id/addresses', async (req, res) => {
   }
 });
 
-// @desc    [تشخيص مؤقت] فحص حالة متغير FIREBASE_SERVICE_ACCOUNT بدون كشف محتواه
-// @route   GET /api/auth/debug/push-config
-router.get('/debug/push-config', async (req, res) => {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  const diagnostics = {
-    envVarSet: !!raw,
-    envVarLength: raw ? raw.length : 0,
-  };
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      diagnostics.validJson = true;
-      diagnostics.hasProjectId = !!parsed.project_id;
-      diagnostics.hasPrivateKey = !!parsed.private_key;
-      diagnostics.hasClientEmail = !!parsed.client_email;
-      diagnostics.projectId = parsed.project_id || null;
-      // فحص شكل المفتاح الخاص (لازم يبدأ ب BEGIN PRIVATE KEY ويحتوي أسطر \n)
-      diagnostics.privateKeyLooksValid = typeof parsed.private_key === 'string' &&
-        parsed.private_key.includes('BEGIN PRIVATE KEY') &&
-        parsed.private_key.includes('\n');
-    } catch (e) {
-      diagnostics.validJson = false;
-      diagnostics.jsonError = e.message;
-    }
-  }
-  res.status(200).json({ success: true, diagnostics });
-});
-
-// @desc    [تشخيص مؤقت] إرسال إشعار تجريبي فوري ومعرفة سبب الفشل إن وجد
-// @route   POST /api/auth/users/:id/test-push
-router.post('/users/:id/test-push', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
-    }
-    const { sendPushToUser } = require('../utils/sendPushNotification');
-    const result = await sendPushToUser(user, {
-      title: 'إشعار تجريبي 🔔',
-      body: 'إذا وصلك هذا، الإشعارات شغالة تمام!',
-      data: { test: 'true' },
-    });
-    res.status(200).json({ success: true, hasToken: !!user.fcmToken, result });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // @desc    تسجيل/تحديث رمز جهاز الإشعارات (FCM) الخاص بالمستخدم
 // @route   PUT /api/auth/users/:id/fcm-token
 router.put('/users/:id/fcm-token', async (req, res) => {
