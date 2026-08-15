@@ -510,6 +510,48 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
+// @desc    تعديل قيمة منتجات الطلب من قبل المحل (اختلاف الوزن الفعلي) وإشعار الزبون
+// @route   PUT /api/orders/:id/adjust-price
+router.put('/:id/adjust-price', async (req, res) => {
+  try {
+    const { itemsPrice } = req.body;
+    const newItemsPrice = Number(itemsPrice);
+
+    if (!Number.isFinite(newItemsPrice) || newItemsPrice < 0) {
+      return res.status(400).json({ success: false, message: 'قيمة الفاتورة غير صالحة' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+    }
+
+    const deliveryFee = order.priceDetails?.deliveryFee || 0;
+    order.priceDetails.itemsPrice = newItemsPrice;
+    order.priceDetails.totalPrice = newItemsPrice + deliveryFee;
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تعديل قيمة الفاتورة بنجاح',
+      data: order,
+    });
+
+    // إرسال إشعار Push للزبون بتعديل قيمة طلبه (بدون تأخير الاستجابة)
+    if (order.customer) {
+      User.findById(order.customer)
+        .then((customer) => sendPushToUser(customer, {
+          title: 'تم تعديل قيمة طلبك ⚖️',
+          body: `تم تحديث فاتورة طلبك إلى ${order.priceDetails.totalPrice} د.ع حسب الوزن الفعلي.`,
+          data: { orderId: order._id.toString() },
+        }))
+        .catch(() => {});
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    البحث عن الطلبات النشطة القريبة من السائق (للسائقين للبحث عن طلبات قريبة)
 // @route   GET /api/orders/nearby/pending
 router.get('/nearby/pending', async (req, res) => {
