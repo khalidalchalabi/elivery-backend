@@ -236,6 +236,23 @@ router.get('/dashboard/stats', async (req, res) => {
     const driverEarnings = totalDeliveryFees * 0.8;
     const appCommission = totalDeliveryFees * 0.2;
 
+    // مبيعات آخر 14 يوم مجمعة يومياً للرسم البياني
+    const dailySalesMap = {};
+    const today = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      dailySalesMap[key] = { date: key, revenue: 0, orderCount: 0 };
+    }
+    completedOrders.forEach(order => {
+      const key = order.createdAt.toISOString().slice(0, 10);
+      if (dailySalesMap[key]) {
+        dailySalesMap[key].revenue += order.priceDetails?.totalPrice || 0;
+        dailySalesMap[key].orderCount += 1;
+      }
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -252,7 +269,8 @@ router.get('/dashboard/stats', async (req, res) => {
           totalDeliveryFees,
           driverEarnings,
           appCommission,
-        }
+        },
+        dailySales: Object.values(dailySalesMap),
       }
     });
   } catch (error) {
