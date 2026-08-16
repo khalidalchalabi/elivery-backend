@@ -109,10 +109,38 @@ router.get('/customers-list', async (req, res) => {
         cancelledOrdersCount: cancelled.length,
         totalSpent: spent,
         completionRate: custOrders.length > 0 ? Math.round((completed.length / custOrders.length) * 100) : 100,
+        loyaltyPoints: c.loyaltyPoints || 0,
       };
     });
 
     res.status(200).json({ success: true, count: customersWithStats.length, data: customersWithStats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    تعديل رصيد نقاط الولاء لزبون يدوياً (إضافة أو خصم من قبل الإدارة)
+// @route   PUT /api/admin/users/:id/loyalty-points
+router.put('/users/:id/loyalty-points', async (req, res) => {
+  try {
+    const delta = Number(req.body.delta);
+    if (!delta || isNaN(delta)) {
+      return res.status(400).json({ success: false, message: 'الرجاء إدخال قيمة تعديل صحيحة' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    user.loyaltyPoints = Math.max(0, (user.loyaltyPoints || 0) + delta);
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تعديل رصيد نقاط الولاء بنجاح',
+      data: { loyaltyPoints: user.loyaltyPoints },
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
