@@ -99,6 +99,52 @@ router.get('/shop/:shopId', async (req, res) => {
   }
 });
 
+// @desc    تقرير طلبات محل معين ليوم واحد (لطباعته على طابعة POS بلوحة الإدارة)
+// @route   GET /api/orders/shop-daily-report/:shopId?date=YYYY-MM-DD
+router.get('/shop-daily-report/:shopId', async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ success: false, message: 'الرجاء تحديد تاريخ صحيح بصيغة YYYY-MM-DD' });
+    }
+
+    const Shop = require('../models/Shop');
+    const shop = await Shop.findById(req.params.shopId).select('name');
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'المحل غير موجود' });
+    }
+
+    const [y, m, d] = date.split('-').map(Number);
+    // بداية اليوم بتوقيت العراق (UTC+3) محوّلة لتوقيت UTC
+    const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - 3 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+
+    const orders = await Order.find({
+      shop: req.params.shopId,
+      status: 'completed',
+      createdAt: { $gte: start, $lt: end },
+    })
+      .populate('customer', 'name')
+      .select('customer priceDetails createdAt')
+      .sort({ createdAt: 1 });
+
+    const totalRevenue = orders.reduce((sum, o) => sum + (o.priceDetails?.totalPrice || 0), 0);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        shopName: shop.name,
+        date,
+        orders,
+        totalOrders: orders.length,
+        totalRevenue,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    إنشاء طلب توصيل جديد
 // @route   POST /api/orders
 router.post('/', async (req, res) => {
