@@ -574,15 +574,21 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
-// @desc    تعديل قيمة منتجات الطلب من قبل المحل (اختلاف الوزن الفعلي) وإشعار الزبون
+// @desc    تعديل قيمة منتجات الطلب (إدارة النظام فقط) وإشعار الزبون
 // @route   PUT /api/orders/:id/adjust-price
 router.put('/:id/adjust-price', async (req, res) => {
   try {
-    const { itemsPrice } = req.body;
+    const { itemsPrice, actorId } = req.body;
     const newItemsPrice = Number(itemsPrice);
 
     if (!Number.isFinite(newItemsPrice) || newItemsPrice < 0) {
       return res.status(400).json({ success: false, message: 'قيمة الفاتورة غير صالحة' });
+    }
+
+    // تعديل قيمة الفاتورة صار حصراً لمدير النظام/المالك لمنع تلاعب المحلات بقيمة طلباتها
+    const actor = actorId ? await User.findById(actorId).select('role') : null;
+    if (!actor || !['admin', 'owner', 'accountant'].includes(actor.role)) {
+      return res.status(403).json({ success: false, message: 'غير مصرح لك بتعديل قيمة الفاتورة' });
     }
 
     const order = await Order.findById(req.params.id);
