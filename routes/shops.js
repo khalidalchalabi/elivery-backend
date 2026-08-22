@@ -153,8 +153,33 @@ router.put('/:id', async (req, res) => {
 // @route   GET /api/shops/:shopId/products
 router.get('/:shopId/products', async (req, res) => {
   try {
-    const products = await Product.find({ shop: req.params.shopId }).sort({ createdAt: -1 });
+    // withImages=false تُرجع بيانات المنتجات بدون صور (حمولة صغيرة جداً وسريعة)،
+    // تُستخدم لعرض القائمة فوراً بمحلات المنتجات الكثيرة، ثم تُجلب الصور لاحقاً
+    // بدفعات صغيرة عبر GET /:shopId/products/images
+    const withImages = req.query.withImages !== 'false';
+    let query = Product.find({ shop: req.params.shopId }).sort({ createdAt: -1 });
+    if (!withImages) {
+      query = query.select('-imagePath');
+    }
+    const products = await query;
     res.status(200).json({ success: true, count: products.length, data: products });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب صور دفعة من المنتجات فقط (id -> imagePath)، للتحميل التدريجي بالخلفية
+// @route   GET /api/shops/:shopId/products/images?ids=id1,id2,id3
+router.get('/:shopId/products/images', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 40);
+    if (ids.length === 0) {
+      return res.status(200).json({ success: true, data: {} });
+    }
+    const products = await Product.find({ shop: req.params.shopId, _id: { $in: ids } }).select('imagePath');
+    const map = {};
+    products.forEach((p) => { map[p._id.toString()] = p.imagePath; });
+    res.status(200).json({ success: true, data: map });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
