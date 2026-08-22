@@ -35,24 +35,36 @@ async function compressExistingImage(dataUri, maxDimension = 800, quality = 70) 
 // حتى تصير remainingEstimate كلها صفر
 router.post('/optimize-images', async (req, res) => {
   try {
-    const { confirm, limit = 20, minSizeKb = 80 } = req.body;
+    const { confirm, limit = 20, minSizeKb = 300, maxSizeKb = 4000 } = req.body;
     if (confirm !== 'yes-migrate-images') {
       return res.status(400).json({ success: false, message: 'يجب تأكيد العملية بإرسال confirm=yes-migrate-images' });
     }
 
     const minSizeBytes = Number(minSizeKb) * 1024;
+    const maxSizeBytes = Number(maxSizeKb) * 1024;
     const oversizedFilter = {
       imagePath: { $regex: '^data:image' },
       $expr: { $gt: [{ $strLenBytes: '$imagePath' }, minSizeBytes] },
     };
 
-    const results = { products: { compressed: 0, skipped: 0 }, shops: { compressed: 0, skipped: 0 }, ads: { compressed: 0, skipped: 0 } };
+    const results = { products: { compressed: 0, skipped: 0, tooLarge: 0 }, shops: { compressed: 0, skipped: 0, tooLarge: 0 }, ads: { compressed: 0, skipped: 0, tooLarge: 0 } };
     const debugErrors = [];
 
     async function processCollection(Model, key) {
-      const docs = await Model.find(oversizedFilter).limit(Number(limit));
-      for (const doc of docs) {
-        const sizeBytes = Buffer.byteLength(doc.imagePath, 'utf8');
+      const docs = await Model.find(oversizedFilter).limit(Number(limit) * 3);
+      // نبدأ بالأصغر حجماً (ضمن النطاق المطلوب) تجنباً لخطر انهيار الذاكرة
+      // مع أكبر الصور دفعة واحدة على خطة Render المجانية المحدودة
+      const withSize = docs.map((doc) => ({ doc, sizeBytes: Buffer.byteLength(doc.imagePath, 'utf8') }));
+      withSize.sort((a, b) => a.sizeBytes - b.sizeBytes);
+
+      let processedCount = 0;
+      for (const { doc, sizeBytes } of withSize) {
+        if (processedCount >= Number(limit)) break;
+        if (sizeBytes > maxSizeBytes) {
+          results[key].tooLarge++;
+          continue;
+        }
+        processedCount++;
         try {
           const compressed = await compressExistingImage(doc.imagePath);
           const newSizeBytes = Buffer.byteLength(compressed, 'utf8');
