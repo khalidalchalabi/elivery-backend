@@ -47,6 +47,7 @@ router.post('/optimize-images', async (req, res) => {
     };
 
     const results = { products: { compressed: 0, skipped: 0 }, shops: { compressed: 0, skipped: 0 }, ads: { compressed: 0, skipped: 0 } };
+    const debugErrors = [];
 
     async function processCollection(Model, key) {
       const docs = await Model.find(oversizedFilter).limit(Number(limit));
@@ -64,6 +65,9 @@ router.post('/optimize-images', async (req, res) => {
           }
         } catch (e) {
           results[key].skipped++;
+          if (debugErrors.length < 5) {
+            debugErrors.push({ id: doc._id.toString(), header: doc.imagePath.slice(0, 30), sizeKb: Math.round(sizeBytes / 1024), error: e.message });
+          }
         }
       }
     }
@@ -78,7 +82,7 @@ router.post('/optimize-images', async (req, res) => {
       ads: await Ad.countDocuments(oversizedFilter),
     };
 
-    res.status(200).json({ success: true, results, remainingEstimate });
+    res.status(200).json({ success: true, results, remainingEstimate, debugErrors });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
