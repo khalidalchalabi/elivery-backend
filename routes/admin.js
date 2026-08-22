@@ -1,13 +1,88 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const Jimp = require('jimp');
 const router = express.Router();
 const User = require('../models/User');
 const Order = require('../models/Order');
 const PromoCode = require('../models/PromoCode');
 const Ad = require('../models/Ad');
 const Shop = require('../models/Shop');
+const Product = require('../models/Product');
 const AuditLog = require('../models/AuditLog');
 const { sendPushToUser, sendPushToTopic } = require('../utils/sendPushNotification');
+
+// دالة مساعدة لضغط صورة base64 كبيرة (مستخدمة بمهمة تنظيف الصور القديمة أدناه فقط)
+async function compressExistingImage(dataUri, maxDimension = 800, quality = 70) {
+  const commaIdx = dataUri.indexOf(',');
+  const base64Data = commaIdx >= 0 ? dataUri.slice(commaIdx + 1) : dataUri;
+  const buffer = Buffer.from(base64Data, 'base64');
+  const image = await Jimp.read(buffer);
+  if (image.bitmap.width > maxDimension || image.bitmap.height > maxDimension) {
+    if (image.bitmap.width >= image.bitmap.height) {
+      image.resize(maxDimension, Jimp.AUTO);
+    } else {
+      image.resize(Jimp.AUTO, maxDimension);
+    }
+  }
+  image.quality(quality);
+  const outBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+  return `data:image/jpeg;base64,${outBuffer.toString('base64')}`;
+}
+
+// @desc    ضغط الصور الكبيرة الموجودة مسبقاً بقاعدة البيانات (مهمة تنظيف تُشغّل مرة واحدة، بالدفعات)
+// @route   POST /api/admin/optimize-images
+// يعالج حتى limit عنصر بكل نوع بكل استدعاء (تجنباً لانتهاء مهلة الطلب) — يُستدعى بشكل متكرر
+// حتى تصير remainingEstimate كلها صفر
+router.post('/optimize-images', async (req, res) => {
+  try {
+    const { confirm, limit = 20, minSizeKb = 80 } = req.body;
+    if (confirm !== 'yes-migrate-images') {
+      return res.status(400).json({ success: false, message: 'يجب تأكيد العملية بإرسال confirm=yes-migrate-images' });
+    }
+
+    const minSizeBytes = Number(minSizeKb) * 1024;
+    const oversizedFilter = {
+      imagePath: { $regex: '^data:image' },
+      $expr: { $gt: [{ $strLenBytes: '$imagePath' }, minSizeBytes] },
+    };
+
+    const results = { products: { compressed: 0, skipped: 0 }, shops: { compressed: 0, skipped: 0 }, ads: { compressed: 0, skipped: 0 } };
+
+    async function processCollection(Model, key) {
+      const docs = await Model.find(oversizedFilter).limit(Number(limit));
+      for (const doc of docs) {
+        const sizeBytes = Buffer.byteLength(doc.imagePath, 'utf8');
+        try {
+          const compressed = await compressExistingImage(doc.imagePath);
+          const newSizeBytes = Buffer.byteLength(compressed, 'utf8');
+          if (newSizeBytes < sizeBytes) {
+            doc.imagePath = compressed;
+            await doc.save();
+            results[key].compressed++;
+          } else {
+            results[key].skipped++;
+          }
+        } catch (e) {
+          results[key].skipped++;
+        }
+      }
+    }
+
+    await processCollection(Product, 'products');
+    await processCollection(Shop, 'shops');
+    await processCollection(Ad, 'ads');
+
+    const remainingEstimate = {
+      products: await Product.countDocuments(oversizedFilter),
+      shops: await Shop.countDocuments(oversizedFilter),
+      ads: await Ad.countDocuments(oversizedFilter),
+    };
+
+    res.status(200).json({ success: true, results, remainingEstimate });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // @desc    جلب إحصائيات لوحة التحكم
 // @route   GET /api/admin/stats
