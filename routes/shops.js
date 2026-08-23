@@ -21,8 +21,33 @@ router.get('/', async (req, res) => {
     // لأغراض احتياطية بتطبيق الزبون، مما يجعل حمولة الشاشة الرئيسية ضخمة جداً
     // (مئات الكيلوبايتات) بمجرد ما يصير عند أي محل عدد منتجات كبير. الشاشة
     // الرئيسية لا تحتاج فعلياً غير بيانات المحل نفسه
-    const shops = await Shop.find().sort({ createdAt: -1 });
+
+    // withImages=false تُرجع بيانات المحلات بدون صورة البانر (حمولة صغيرة
+    // وفورية تقريباً)، ثم تُجلب الصور فوراً بعدها بدفعة واحدة عبر GET /images
+    const withImages = req.query.withImages !== 'false';
+    let query = Shop.find().sort({ createdAt: -1 });
+    if (!withImages) {
+      query = query.select('-imagePath');
+    }
+    const shops = await query;
     res.status(200).json({ success: true, count: shops.length, data: shops });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب صور بانر دفعة من المحلات فقط (id -> imagePath)
+// @route   GET /api/shops/images?ids=id1,id2,id3
+router.get('/images', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50);
+    if (ids.length === 0) {
+      return res.status(200).json({ success: true, data: {} });
+    }
+    const shops = await Shop.find({ _id: { $in: ids } }).select('imagePath');
+    const map = {};
+    shops.forEach((s) => { map[s._id.toString()] = s.imagePath; });
+    res.status(200).json({ success: true, data: map });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
