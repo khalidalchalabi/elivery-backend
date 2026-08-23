@@ -8,6 +8,7 @@ const PromoCode = require('../models/PromoCode');
 const Ad = require('../models/Ad');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
+const Category = require('../models/Category');
 const AuditLog = require('../models/AuditLog');
 const { sendPushToUser, sendPushToTopic } = require('../utils/sendPushNotification');
 
@@ -42,19 +43,28 @@ router.post('/optimize-images', async (req, res) => {
 
     const minSizeBytes = Number(minSizeKb) * 1024;
     const maxSizeBytes = Number(maxSizeKb) * 1024;
-    const oversizedFilter = {
-      imagePath: { $regex: '^data:image' },
-      $expr: { $gt: [{ $strLenBytes: '$imagePath' }, minSizeBytes] },
-    };
 
-    const results = { products: { compressed: 0, skipped: 0, tooLarge: 0 }, shops: { compressed: 0, skipped: 0, tooLarge: 0 }, ads: { compressed: 0, skipped: 0, tooLarge: 0 } };
+    const results = {
+      products: { compressed: 0, skipped: 0, tooLarge: 0 },
+      shops: { compressed: 0, skipped: 0, tooLarge: 0 },
+      ads: { compressed: 0, skipped: 0, tooLarge: 0 },
+      categories: { compressed: 0, skipped: 0, tooLarge: 0 },
+    };
     const debugErrors = [];
 
-    async function processCollection(Model, key) {
-      const docs = await Model.find(oversizedFilter).limit(Number(limit) * 3);
+    function fieldFilter(field) {
+      return {
+        [field]: { $regex: '^data:image' },
+        $expr: { $gt: [{ $strLenBytes: `$${field}` }, minSizeBytes] },
+      };
+    }
+
+    async function processCollection(Model, key, field = 'imagePath') {
+      const filter = fieldFilter(field);
+      const docs = await Model.find(filter).limit(Number(limit) * 3);
       // نبدأ بالأصغر حجماً (ضمن النطاق المطلوب) تجنباً لخطر انهيار الذاكرة
       // مع أكبر الصور دفعة واحدة على خطة Render المجانية المحدودة
-      const withSize = docs.map((doc) => ({ doc, sizeBytes: Buffer.byteLength(doc.imagePath, 'utf8') }));
+      const withSize = docs.map((doc) => ({ doc, sizeBytes: Buffer.byteLength(doc[field], 'utf8') }));
       withSize.sort((a, b) => a.sizeBytes - b.sizeBytes);
 
       let processedCount = 0;
@@ -66,10 +76,10 @@ router.post('/optimize-images', async (req, res) => {
         }
         processedCount++;
         try {
-          const compressed = await compressExistingImage(doc.imagePath);
+          const compressed = await compressExistingImage(doc[field]);
           const newSizeBytes = Buffer.byteLength(compressed, 'utf8');
           if (newSizeBytes < sizeBytes) {
-            doc.imagePath = compressed;
+            doc[field] = compressed;
             await doc.save();
             results[key].compressed++;
           } else {
@@ -78,7 +88,7 @@ router.post('/optimize-images', async (req, res) => {
         } catch (e) {
           results[key].skipped++;
           if (debugErrors.length < 5) {
-            debugErrors.push({ id: doc._id.toString(), header: doc.imagePath.slice(0, 30), sizeKb: Math.round(sizeBytes / 1024), error: e.message });
+            debugErrors.push({ id: doc._id.toString(), header: doc[field].slice(0, 30), sizeKb: Math.round(sizeBytes / 1024), error: e.message });
           }
         }
       }
@@ -87,11 +97,13 @@ router.post('/optimize-images', async (req, res) => {
     await processCollection(Product, 'products');
     await processCollection(Shop, 'shops');
     await processCollection(Ad, 'ads');
+    await processCollection(Category, 'categories', 'backgroundImage');
 
     const remainingEstimate = {
-      products: await Product.countDocuments(oversizedFilter),
-      shops: await Shop.countDocuments(oversizedFilter),
-      ads: await Ad.countDocuments(oversizedFilter),
+      products: await Product.countDocuments(fieldFilter('imagePath')),
+      shops: await Shop.countDocuments(fieldFilter('imagePath')),
+      ads: await Ad.countDocuments(fieldFilter('imagePath')),
+      categories: await Category.countDocuments(fieldFilter('backgroundImage')),
     };
 
     res.status(200).json({ success: true, results, remainingEstimate, debugErrors });
