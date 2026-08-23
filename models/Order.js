@@ -161,4 +161,9 @@ const OrderSchema = new mongoose.Schema(
 OrderSchema.index({ pickupLocation: '2dsphere' });
 OrderSchema.index({ dropoffLocation: '2dsphere' });
 
+// فهارس لتسريع أكثر الاستعلامات شيوعاً (سجل طلبات الزبون، أداء السواق، تقارير المحلات)
+OrderSchema.index({ customer: 1, createdAt: -1 });
+OrderSchema.index({ driver: 1, status: 1 });
+OrderSchema.index({ shop: 1, status: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Order', OrderSchema);

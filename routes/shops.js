@@ -30,6 +30,8 @@ router.get('/', async (req, res) => {
       query = query.select('-imagePath');
     }
     const shops = await query;
+    // 30 ثانية: بيانات المحل (الحالة مفتوح/مغلق، السعر...) تتغير بين فترة وثانية
+    res.set('Cache-Control', 'public, max-age=30');
     res.status(200).json({ success: true, count: shops.length, data: shops });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -47,6 +49,8 @@ router.get('/images', async (req, res) => {
     const shops = await Shop.find({ _id: { $in: ids } }).select('imagePath');
     const map = {};
     shops.forEach((s) => { map[s._id.toString()] = s.imagePath; });
+    // 5 دقائق: الصور نفسها تتغير نادراً جداً مقارنة ببيانات المحل
+    res.set('Cache-Control', 'public, max-age=300');
     res.status(200).json({ success: true, data: map });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -175,6 +179,7 @@ router.get('/:shopId/products', async (req, res) => {
       query = query.select('-imagePath');
     }
     const products = await query;
+    res.set('Cache-Control', 'public, max-age=30');
     res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -192,6 +197,7 @@ router.get('/:shopId/products/images', async (req, res) => {
     const products = await Product.find({ shop: req.params.shopId, _id: { $in: ids } }).select('imagePath');
     const map = {};
     products.forEach((p) => { map[p._id.toString()] = p.imagePath; });
+    res.set('Cache-Control', 'public, max-age=300');
     res.status(200).json({ success: true, data: map });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
