@@ -17,24 +17,12 @@ function saveBase64Image(base64Str, req) {
 // @route   GET /api/shops
 router.get('/', async (req, res) => {
   try {
-    const shopsWithMenu = await Shop.aggregate([
-      { $sort: { createdAt: -1 } },
-      {
-        $lookup: {
-          from: 'products',
-          localField: '_id',
-          foreignField: 'shop',
-          as: 'menu'
-        }
-      },
-      {
-        $project: {
-          'menu.imagePath': 0
-        }
-      }
-    ]);
-
-    res.status(200).json({ success: true, count: shopsWithMenu.length, data: shopsWithMenu });
+    // كانت هذه الاستجابة سابقاً تضم كامل قائمة منتجات كل محل (menu) عبر $lookup
+    // لأغراض احتياطية بتطبيق الزبون، مما يجعل حمولة الشاشة الرئيسية ضخمة جداً
+    // (مئات الكيلوبايتات) بمجرد ما يصير عند أي محل عدد منتجات كبير. الشاشة
+    // الرئيسية لا تحتاج فعلياً غير بيانات المحل نفسه
+    const shops = await Shop.find().sort({ createdAt: -1 });
+    res.status(200).json({ success: true, count: shops.length, data: shops });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
