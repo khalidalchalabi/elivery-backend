@@ -7,6 +7,8 @@ const Category = require('../models/Category');
 router.get('/', async (req, res) => {
   try {
     const categories = await Category.find({ isActive: true }).sort({ order: 1, createdAt: 1 });
+    // 5 دقائق: التصنيفات الرئيسية تتغير نادراً جداً
+    res.set('Cache-Control', 'public, max-age=300');
     res.status(200).json({ success: true, data: categories });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
