@@ -18,8 +18,9 @@ function initFirebaseAdmin() {
     const serviceAccount = JSON.parse(raw);
     initializeApp({
       credential: cert(serviceAccount),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'sooqalkhalis.firebasestorage.app',
     });
-    console.log('Firebase Admin تم تهيئته بنجاح — إشعارات Push مفعّلة.');
+    console.log('Firebase Admin تم تهيئته بنجاح — إشعارات Push وتخزين الصور مفعّلة.');
     return true;
   } catch (error) {
     console.error('فشل تهيئة Firebase Admin:', error.message);

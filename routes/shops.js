@@ -6,12 +6,7 @@ const User = require('../models/User');
 const fs = require('fs');
 const path = require('path');
 const { sendPushToUser } = require('../utils/sendPushNotification');
-
-function saveBase64Image(base64Str, req) {
-  // للعمل على سيرفرات مجانية مثل Vercel، سنحفظ الصورة كنص Base64 مباشرة في قاعدة البيانات
-  // بدلاً من حفظها كملف فعلي لتجنب مشاكل الصلاحيات (Read-only filesystem)
-  return base64Str;
-}
+const { saveBase64Image } = require('../utils/imageUpload');
 
 // @desc    جلب كافة المحلات من قاعدة البيانات
 // @route   GET /api/shops
@@ -68,7 +63,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'هذا المحل مسجل بالفعل' });
     }
 
-    const resolvedImagePath = saveBase64Image(imagePath, req);
+    const resolvedImagePath = await saveBase64Image(imagePath, 'shops');
 
     let location = undefined;
     if (latitude !== undefined && longitude !== undefined) {
@@ -133,7 +128,7 @@ router.put('/:id', async (req, res) => {
 
     if (name) shop.name = name;
     if (description !== undefined) shop.description = description;
-    if (imagePath) shop.imagePath = saveBase64Image(imagePath, req);
+    if (imagePath) shop.imagePath = await saveBase64Image(imagePath, 'shops');
     if (deliveryFee !== undefined) shop.deliveryFee = deliveryFee;
     if (deliveryTime) shop.deliveryTime = deliveryTime;
     if (categories) shop.categories = categories;
@@ -238,7 +233,7 @@ router.post('/:shopId/products', async (req, res) => {
       return res.status(404).json({ success: false, message: 'المحل غير موجود لإضافة البضائع إليه' });
     }
 
-    const resolvedImagePath = saveBase64Image(imagePath, req);
+    const resolvedImagePath = await saveBase64Image(imagePath, 'products');
     const parsedPrice = parseFloat(price) || 0;
     const { originalPrice: origP, discountPercentage: discP } = normalizeDiscount(parsedPrice, originalPrice, discountPercentage);
 
@@ -314,7 +309,7 @@ router.put('/products/:id', async (req, res) => {
         await shop.save();
       }
     }
-    if (imagePath) product.imagePath = saveBase64Image(imagePath, req);
+    if (imagePath) product.imagePath = await saveBase64Image(imagePath, 'products');
 
     await product.save();
     res.status(200).json({ success: true, message: 'تم تحديث بيانات المنتج بنجاح', data: product });

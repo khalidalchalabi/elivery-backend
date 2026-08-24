@@ -11,6 +11,7 @@ const Product = require('../models/Product');
 const Category = require('../models/Category');
 const AuditLog = require('../models/AuditLog');
 const { sendPushToUser, sendPushToTopic } = require('../utils/sendPushNotification');
+const { saveBase64Image } = require('../utils/imageUpload');
 
 // دالة مساعدة لضغط صورة base64 كبيرة (مستخدمة بمهمة تنظيف الصور القديمة أدناه فقط)
 async function compressExistingImage(dataUri, maxDimension = 800, quality = 70) {
@@ -104,6 +105,66 @@ router.post('/optimize-images', async (req, res) => {
       shops: await Shop.countDocuments(fieldFilter('imagePath')),
       ads: await Ad.countDocuments(fieldFilter('imagePath')),
       categories: await Category.countDocuments(fieldFilter('backgroundImage')),
+    };
+
+    res.status(200).json({ success: true, results, remainingEstimate, debugErrors });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    نقل الصور القديمة المخزونة base64 داخل قاعدة البيانات إلى Firebase Storage
+//          (مهمة هجرة تُشغّل مرة واحدة، بالدفعات، تستبدل نص base64 برابط عام)
+// @route   POST /api/admin/migrate-images-to-storage
+// يعالج حتى limit عنصر بكل نوع بكل استدعاء (تجنباً لانتهاء مهلة الطلب) — يُستدعى بشكل متكرر
+// حتى تصير remainingEstimate كلها صفر
+router.post('/migrate-images-to-storage', async (req, res) => {
+  try {
+    const { confirm, limit = 15 } = req.body;
+    if (confirm !== 'yes-migrate-images-to-storage') {
+      return res.status(400).json({ success: false, message: 'يجب تأكيد العملية بإرسال confirm=yes-migrate-images-to-storage' });
+    }
+
+    const results = {
+      products: { migrated: 0, failed: 0 },
+      shops: { migrated: 0, failed: 0 },
+      ads: { migrated: 0, failed: 0 },
+    };
+    const debugErrors = [];
+
+    function base64Filter(field) {
+      return { [field]: { $regex: '^data:image' } };
+    }
+
+    async function processCollection(Model, key, folder, field = 'imagePath') {
+      const docs = await Model.find(base64Filter(field)).limit(Number(limit));
+      for (const doc of docs) {
+        try {
+          const url = await saveBase64Image(doc[field], folder);
+          if (url.startsWith('http')) {
+            doc[field] = url;
+            await doc.save();
+            results[key].migrated++;
+          } else {
+            results[key].failed++;
+          }
+        } catch (e) {
+          results[key].failed++;
+          if (debugErrors.length < 5) {
+            debugErrors.push({ id: doc._id.toString(), error: e.message });
+          }
+        }
+      }
+    }
+
+    await processCollection(Product, 'products', 'products');
+    await processCollection(Shop, 'shops', 'shops');
+    await processCollection(Ad, 'ads', 'ads');
+
+    const remainingEstimate = {
+      products: await Product.countDocuments(base64Filter('imagePath')),
+      shops: await Shop.countDocuments(base64Filter('imagePath')),
+      ads: await Ad.countDocuments(base64Filter('imagePath')),
     };
 
     res.status(200).json({ success: true, results, remainingEstimate, debugErrors });

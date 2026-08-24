@@ -4,11 +4,7 @@ const Ad = require('../models/Ad');
 const fs = require('fs');
 const path = require('path');
 const { sendPushToTopic } = require('../utils/sendPushNotification');
-
-// دالة مساعدة لحفظ الصورة المرفوعة كـ base64 (نحفظها مباشرة في قاعدة البيانات للعمل على السيرفرات المجانية مثل Render/Vercel)
-function saveBase64Image(base64Str, req) {
-  return base64Str;
-}
+const { saveBase64Image } = require('../utils/imageUpload');
 
 // دالة مساعدة لحساب المسافة بين نقطتين جغرافيتين بالكيلومترات (Haversine formula)
 function getDistanceInKm(lat1, lon1, lat2, lon2) {
@@ -101,7 +97,7 @@ router.post('/', async (req, res) => {
     }
 
     // حفظ الصورة إذا كانت base64
-    const resolvedImagePath = saveBase64Image(imagePath, req);
+    const resolvedImagePath = await saveBase64Image(imagePath, 'ads');
 
     let targetLocationObj = null;
     if (targetLat !== undefined && targetLng !== undefined && targetLat !== null && targetLng !== null) {
@@ -192,7 +188,7 @@ router.put('/:id', async (req, res) => {
     }
 
     if (imagePath) {
-      ad.imagePath = saveBase64Image(imagePath, req);
+      ad.imagePath = await saveBase64Image(imagePath, 'ads');
     }
 
     await ad.save();
