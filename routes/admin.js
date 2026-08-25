@@ -12,6 +12,7 @@ const Category = require('../models/Category');
 const AuditLog = require('../models/AuditLog');
 const { sendPushToUser, sendPushToTopic } = require('../utils/sendPushNotification');
 const { saveBase64Image } = require('../utils/imageUpload');
+const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 
 // دالة مساعدة لضغط صورة base64 كبيرة (مستخدمة بمهمة تنظيف الصور القديمة أدناه فقط)
 async function compressExistingImage(dataUri, maxDimension = 800, quality = 70) {
@@ -168,6 +169,31 @@ router.post('/migrate-images-to-storage', async (req, res) => {
     };
 
     res.status(200).json({ success: true, results, remainingEstimate, debugErrors });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    تفعيل CORS على Firebase Storage حتى تقدر متصفحات نسخ الويب (تطبيق
+//          الزبون والكادر) تحمّل صور المحلات/المنتجات المرفوعة كروابط.
+//          بدونها يمنع المتصفح تحميل الصورة رغم إنها تشتغل عادي بالموبايل
+// @route   POST /api/admin/configure-storage-cors
+router.post('/configure-storage-cors', async (req, res) => {
+  try {
+    if (!initFirebaseAdmin()) {
+      return res.status(500).json({ success: false, message: 'Firebase Admin غير مهيّأ' });
+    }
+    const { getStorage } = require('firebase-admin/storage');
+    const bucket = getStorage().bucket();
+    await bucket.setCorsConfiguration([
+      {
+        origin: ['*'],
+        method: ['GET', 'HEAD'],
+        responseHeader: ['Content-Type', 'Cache-Control', 'ETag'],
+        maxAgeSeconds: 3600,
+      },
+    ]);
+    res.status(200).json({ success: true, message: 'تم تفعيل CORS على Firebase Storage بنجاح' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
