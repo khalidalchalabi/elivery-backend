@@ -167,6 +167,7 @@ router.post('/', async (req, res) => {
       replacementPreference,
       scheduledFor,
       shopId,
+      groupOrderId,
     } = req.body;
 
     // دعم كلا التنسيقين (المتداخل والمسطح) لتجنب أخطاء الإرسال
@@ -243,6 +244,7 @@ router.post('/', async (req, res) => {
         totalPrice: totalPrice,
       },
       shop: finalShopId || null,
+      groupOrderId: groupOrderId || null,
     });
 
     await order.save();
@@ -377,6 +379,32 @@ router.get('/:id', async (req, res) => {
     }
 
     res.status(200).json({ success: true, data: order });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب أسماء المحلات الشقيقة لطلب معين (طلبات نتجت من نفس عملية
+//          الدفع لسلة تحتوي أصناف من عدة محلات دفعة وحدة) — تُستخدم
+//          بطباعة الوصل لتنبيه المحل/الدعم إن الزبون طلب أيضاً من محل آخر
+// @route   GET /api/orders/:id/siblings
+router.get('/:id/siblings', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).select('groupOrderId shop');
+    if (!order || !order.groupOrderId) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const siblings = await Order.find({
+      groupOrderId: order.groupOrderId,
+      _id: { $ne: order._id },
+    }).populate('shop', 'name');
+
+    const shopNames = siblings
+      .map((s) => s.shop && s.shop.name)
+      .filter(Boolean);
+
+    res.status(200).json({ success: true, data: shopNames });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

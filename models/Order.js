@@ -83,6 +83,10 @@ const OrderSchema = new mongoose.Schema(
       enum: ['pending', 'paid', 'failed'],
       default: 'pending',
     },
+    // معرّف مشترك يربط الطلبات المنفصلة الناتجة عن سلة واحدة تحتوي أصناف
+    // من عدة محلات دفعة وحدة (كل محل له طلب مستقل، لكن كلها تحمل نفس
+    // groupOrderId لأنها من نفس عملية الدفع). فارغ للطلبات العادية (محل واحد)
+    groupOrderId: { type: String, default: null },
     promoCode: { type: String, default: null },
     discountAmount: { type: Number, default: 0 },
     priceDetails: {
@@ -165,5 +169,6 @@ OrderSchema.index({ dropoffLocation: '2dsphere' });
 OrderSchema.index({ customer: 1, createdAt: -1 });
 OrderSchema.index({ driver: 1, status: 1 });
 OrderSchema.index({ shop: 1, status: 1, createdAt: -1 });
+OrderSchema.index({ groupOrderId: 1 });
 
 module.exports = mongoose.model('Order', OrderSchema);
