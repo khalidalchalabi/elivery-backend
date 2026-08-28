@@ -25,7 +25,6 @@ const UserSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: [true, 'الرجاء إدخال رقم الهاتف'],
-      unique: true,
       trim: true,
     },
     role: {
@@ -148,5 +147,9 @@ const UserSchema = new mongoose.Schema(
 
 // إنشاء فهرس جغرافي لموقع السائق لتسريع عمليات البحث الجغرافي (مثل إيجاد أقرب سائق)
 UserSchema.index({ 'driverDetails.currentLocation': '2dsphere' });
+
+// فريد على مستوى (الهاتف + الدور) وليس الهاتف وحده، حتى يقدر نفس الشخص
+// (مثلاً موظف بالكادر) يملك حساب زبون منفصل بنفس رقم هاتفه لأغراض العمل
+UserSchema.index({ phone: 1, role: 1 }, { unique: true });
 
 module.exports = mongoose.model('User', UserSchema);

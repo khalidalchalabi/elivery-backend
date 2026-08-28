@@ -33,9 +33,12 @@ router.post('/customer/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال الاسم، رقم الهاتف وكلمة المرور' });
     }
 
-    let userExists = await User.findOne({ phone });
+    // نتحقق من التكرار ضمن حسابات الزبائن فقط، لأن نفس رقم الهاتف قد
+    // يكون مسجلاً أصلاً كحساب موظف (دعم/تاجر/إدارة...) بتطبيق الكادر،
+    // وهذا مسموح به (حسابان منفصلان بدورين مختلفين لنفس الرقم)
+    let userExists = await User.findOne({ phone, role: 'customer' });
     if (userExists) {
-      return res.status(400).json({ success: false, message: 'رقم الهاتف مسجل بالفعل' });
+      return res.status(400).json({ success: false, message: 'رقم الهاتف مسجل بالفعل كحساب زبون' });
     }
 
     const user = new User({

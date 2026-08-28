@@ -174,6 +174,38 @@ router.post('/migrate-images-to-storage', async (req, res) => {
   }
 });
 
+// @desc    فهرس phone كان فريداً على مستوى قاعدة البيانات كلها (كل الأدوار)،
+//          فيمنع مثلاً موظف الدعم من إنشاء حساب زبون منفصل بنفس رقمه.
+//          هذه مهمة هجرة تُشغّل مرة واحدة: تحذف الفهرس القديم phone_1 وتنشئ
+//          بدلاً عنه فهرساً مركباً فريداً على (phone + role)
+// @route   POST /api/admin/fix-phone-index
+router.post('/fix-phone-index', async (req, res) => {
+  try {
+    const { confirm } = req.body;
+    if (confirm !== 'yes-fix-phone-index') {
+      return res.status(400).json({ success: false, message: 'يجب تأكيد العملية بإرسال confirm=yes-fix-phone-index' });
+    }
+
+    const collection = User.collection;
+    const existingIndexes = await collection.indexes();
+    const droppedIndexes = [];
+
+    for (const idx of existingIndexes) {
+      // أي فهرس فريد قديم على phone وحده (بغض النظر عن اسمه الفعلي)
+      if (idx.unique && idx.key && Object.keys(idx.key).length === 1 && idx.key.phone === 1) {
+        await collection.dropIndex(idx.name);
+        droppedIndexes.push(idx.name);
+      }
+    }
+
+    await collection.createIndex({ phone: 1, role: 1 }, { unique: true });
+
+    res.status(200).json({ success: true, droppedIndexes, message: 'تم تحديث فهرس رقم الهاتف بنجاح' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // @desc    تفعيل CORS على Firebase Storage حتى تقدر متصفحات نسخ الويب (تطبيق
 //          الزبون والكادر) تحمّل صور المحلات/المنتجات المرفوعة كروابط.
 //          بدونها يمنع المتصفح تحميل الصورة رغم إنها تشتغل عادي بالموبايل
@@ -520,15 +552,14 @@ router.get('/financials/shops', async (req, res) => {
           const itemsPrice = order.priceDetails?.itemsPrice || 0;
           shopStats[shopId].totalSales += itemsPrice;
           shopStats[shopId].totalOrders += 1;
-          shopStats[shopId].commission += itemsPrice * 0.05;
         }
       }
     });
 
+    // تم إلغاء عمولة المنصة 5% بالكامل (وأجور التطبيق 5% عن الزبون أيضاً) —
+    // المحل يستحق كامل قيمة مبيعاته بدون أي اقتطاع
     Object.keys(shopStats).forEach(id => {
-      // 30% من المبيعات تذهب للتاجر، أو 5% عمولة للمنصة (حسب ما هو معتمد)
-      // التاجر يستحق 95% من مبيعاته (أي مبيعاته ناقص 5% عمولة المنصة)
-      shopStats[id].unpaidBalance = Math.round(shopStats[id].totalSales * 0.95);
+      shopStats[id].unpaidBalance = Math.round(shopStats[id].totalSales);
     });
 
     res.status(200).json({ success: true, data: Object.values(shopStats) });
