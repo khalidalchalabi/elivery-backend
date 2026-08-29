@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const User = require('../models/User');
+const Shop = require('../models/Shop');
 const { sendPushToUser } = require('../utils/sendPushNotification');
 
 // نصوص إشعارات حالة الطلب بالعربية
@@ -196,6 +197,15 @@ router.post('/', async (req, res) => {
       const firstProduct = await Product.findById(items[0].product);
       if (firstProduct && firstProduct.shop) {
         finalShopId = firstProduct.shop.toString();
+      }
+    }
+
+    // منع إنشاء طلب لمحل مغلق حالياً — التحقق بالواجهة وحده غير كافٍ لأنه
+    // ممكن يتم تجاوزه (سلة قديمة، حالة محل تغيّرت بعد فتح الشاشة، إلخ)
+    if (finalShopId) {
+      const shop = await Shop.findById(finalShopId).select('isOpen');
+      if (shop && shop.isOpen === false) {
+        return res.status(400).json({ success: false, message: 'هذا المحل مغلق حالياً ولا يستقبل طلبات جديدة' });
       }
     }
 
