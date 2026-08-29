@@ -504,27 +504,30 @@ router.put('/:id/accept', async (req, res) => {
       return res.status(404).json({ success: false, message: 'السائق غير موجود' });
     }
 
-    // البحث عن الطلب وتحديثه
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      console.log('Order not found');
-      return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
-    }
+    // تحديث ذري (findOneAndUpdate بشرط مسبق) بدل قراءة ثم حفظ، لمنع سباق
+    // حقيقي بين سائقين يقبلون نفس الطلب بنفس اللحظة — النسخة القديمة كانت
+    // تقرأ الطلب ثم تتحقق ثم تحفظ بخطوات منفصلة، وهذا يسمح نظرياً لطلبين
+    // قبول متزامنين يجتازون التحقق قبل ما يحفظ أي منهم
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, driver: null, status: { $in: ['pending', 'preparing', 'ready'] } },
+      { $set: { driver: driverId, status: 'accepted', acceptedAt: Date.now() } },
+      { new: true }
+    );
 
-    if (!['pending', 'preparing', 'ready'].includes(order.status)) {
-      console.log('Order status is invalid:', order.status);
+    if (!order) {
+      // نتحقق لاحقاً (بدون أي تأثير على القرار الذري أعلاه) بس لعرض رسالة خطأ دقيقة
+      const existing = await Order.findById(req.params.id);
+      if (!existing) {
+        console.log('Order not found');
+        return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+      }
+      if (existing.driver) {
+        console.log('Order already has a driver assigned:', existing.driver);
+        return res.status(400).json({ success: false, message: 'تم استلام هذا الطلب من قبل سائق آخر' });
+      }
+      console.log('Order status is invalid:', existing.status);
       return res.status(400).json({ success: false, message: 'هذا الطلب تم قبوله بالفعل أو ملغى' });
     }
-
-    if (order.driver) {
-      console.log('Order already has a driver assigned:', order.driver);
-      return res.status(400).json({ success: false, message: 'تم استلام هذا الطلب من قبل سائق آخر' });
-    }
-
-    order.driver = driverId;
-    order.status = 'accepted';
-    order.acceptedAt = Date.now();
-    await order.save();
 
     // تحديث حالة السائق إلى غير متاح حالياً لاستلام طلبات أخرى
     if (!driver.driverDetails) {
