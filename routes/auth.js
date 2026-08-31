@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const PromoCode = require('../models/PromoCode');
+const { getDefaultRegionId } = require('../utils/regionHelper');
 
 async function logSecurityEvent(userId, username, role, action, details, req) {
   try {
@@ -240,7 +241,7 @@ router.put('/driver/location/:id', async (req, res) => {
 router.get('/drivers', async (req, res) => {
   try {
     const Order = require('../models/Order');
-    const drivers = await User.find({ role: 'driver' }).select('-password').lean();
+    const drivers = await User.find({ role: 'driver' }).select('-password').populate('region', 'name').lean();
     
     // جلب الطلبات النشطة حالياً التي يعمل عليها كباتن التوصيل
     const activeOrders = await Order.find({ status: { $in: ['accepted', 'picking_up', 'delivering'] }, driver: { $ne: null } }).select('driver').lean();
@@ -318,7 +319,7 @@ router.get('/drivers/nearby', async (req, res) => {
 // @route   POST /api/auth/employee
 router.post('/employee', async (req, res) => {
   try {
-    const { name, email, password, phone, role, driverDetails, shopId, address, profilePicture, avatar } = req.body;
+    const { name, email, password, phone, role, driverDetails, shopId, address, profilePicture, avatar, regionId } = req.body;
 
     const allowedRoles = ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'];
     if (!allowedRoles.includes(role)) {
@@ -356,6 +357,9 @@ router.post('/employee', async (req, res) => {
         currentLocation: { type: 'Point', coordinates: [0, 0] }
       } : undefined,
       shop: role === 'merchant' ? shopId : undefined,
+      // منطقة عمل السائق: المرسلة من الإدارة، وإلا المنطقة الافتراضية —
+      // حتى لا يبقى سائق بلا منطقة (يمنعه لاحقاً من قبول أي طلب إطلاقاً)
+      region: role === 'driver' ? (regionId || await getDefaultRegionId()) : undefined,
     });
 
     await user.save();
@@ -371,7 +375,7 @@ router.post('/employee', async (req, res) => {
 // @route   PUT /api/auth/employee/:id
 router.put('/employee/:id', async (req, res) => {
   try {
-    const { name, email, phone, role, isActive, shopId, address, profilePicture, avatar } = req.body;
+    const { name, email, phone, role, isActive, shopId, address, profilePicture, avatar, regionId } = req.body;
     const user = await User.findById(req.params.id);
     if (!user || user.role === 'customer') {
       return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
@@ -383,6 +387,7 @@ router.put('/employee/:id', async (req, res) => {
     if (role) user.role = role;
     if (typeof isActive !== 'undefined') user.isActive = isActive;
     if (shopId) user.shop = shopId;
+    if (regionId !== undefined) user.region = regionId || null;
 
     const driverAvatar = profilePicture || avatar;
     if (driverAvatar) {
@@ -393,6 +398,8 @@ router.put('/employee/:id', async (req, res) => {
       if (!user.driverDetails) user.driverDetails = {};
       if (address) user.driverDetails.address = address;
       if (driverAvatar) user.driverDetails.avatar = driverAvatar;
+      // سائق بلا منطقة عمل ما يقدر يقبل أي طلب إطلاقاً — نسد الفجوة تلقائياً
+      if (!user.region) user.region = await getDefaultRegionId();
     }
 
     await user.save();
@@ -465,7 +472,7 @@ router.delete('/employee/:id', async (req, res) => {
 // @route   GET /api/auth/employees
 router.get('/employees', async (req, res) => {
   try {
-    const employees = await User.find({ role: { $in: ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'] } }).populate('shop', 'name').sort({ createdAt: -1 });
+    const employees = await User.find({ role: { $in: ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'] } }).populate('shop', 'name').populate('region', 'name').sort({ createdAt: -1 });
     res.status(200).json({ success: true, count: employees.length, data: employees });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

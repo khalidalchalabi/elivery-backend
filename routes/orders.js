@@ -4,6 +4,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Shop = require('../models/Shop');
 const { sendPushToUser } = require('../utils/sendPushNotification');
+const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
 
 // نصوص إشعارات حالة الطلب بالعربية
 const ORDER_STATUS_NOTIFICATIONS = {
@@ -19,7 +20,7 @@ const ORDER_STATUS_NOTIFICATIONS = {
 // @route   GET /api/orders
 router.get('/', async (req, res) => {
   try {
-    const { status, driver, shop, customer, limit = 50, showCompleted = 'false' } = req.query;
+    const { status, driver, shop, customer, region, driverId, limit = 50, showCompleted = 'false' } = req.query;
 
     const query = {};
 
@@ -48,10 +49,27 @@ router.get('/', async (req, res) => {
       query.customer = customer;
     }
 
+    if (driverId) {
+      // مسار موثوق للسائق: نتجاهل أي منطقة يرسلها العميل، ونشتقها من سجل
+      // السائق نفسه بالسيرفر — حتى لو تطبيق السائق معدَّل/غير محدّث
+      const driverUser = await User.findById(driverId).select('role region');
+      if (!driverUser || driverUser.role !== 'driver') {
+        return res.status(404).json({ success: false, message: 'السائق غير موجود' });
+      }
+      if (!driverUser.region) {
+        return res.status(200).json({ success: true, count: 0, data: [], message: 'لم يتم تعيين منطقة عمل لهذا السائق بعد' });
+      }
+      query.region = driverUser.region;
+    } else if (region) {
+      // فلتر مفتوح — يُستخدم من قائمة الدعم/الإدارة الموحّدة (غير مقيّدة بمنطقة أصلاً)
+      query.region = region;
+    }
+
     const orders = await Order.find(query)
       .populate('customer', 'name phone email createdAt')
       .populate('driver', 'name phone driverDetails profilePicture')
       .populate('shop', 'name imagePath deliveryFee description location')
+      .populate('region', 'name')
       .limit(parseInt(limit))
       .lean()
       .sort({ createdAt: -1 });
@@ -202,11 +220,19 @@ router.post('/', async (req, res) => {
 
     // منع إنشاء طلب لمحل مغلق حالياً — التحقق بالواجهة وحده غير كافٍ لأنه
     // ممكن يتم تجاوزه (سلة قديمة، حالة محل تغيّرت بعد فتح الشاشة، إلخ)
+    let resolvedOrderRegion = null;
     if (finalShopId) {
-      const shop = await Shop.findById(finalShopId).select('isOpen');
+      const shop = await Shop.findById(finalShopId).select('isOpen region');
       if (shop && shop.isOpen === false) {
         return res.status(400).json({ success: false, message: 'هذا المحل مغلق حالياً ولا يستقبل طلبات جديدة' });
       }
+      resolvedOrderRegion = shop?.region || null;
+    }
+    if (!resolvedOrderRegion) {
+      // نادراً (طلب بلا shopId، أو محل لم تُحدد منطقته بعد) — نستدل من موقع
+      // الاستلام، وإلا نستخدم المنطقة الافتراضية حتى لا يبقى طلب بلا منطقة
+      resolvedOrderRegion =
+        (await findNearestRegion(parseFloat(pickupLat), parseFloat(pickupLng)))?._id || (await getDefaultRegionId());
     }
 
     // التحقق من صحة العميل
@@ -254,6 +280,7 @@ router.post('/', async (req, res) => {
         totalPrice: totalPrice,
       },
       shop: finalShopId || null,
+      region: resolvedOrderRegion,
       groupOrderId: groupOrderId || null,
     });
 
@@ -503,13 +530,17 @@ router.put('/:id/accept', async (req, res) => {
       console.log('Driver not found or not driver role');
       return res.status(404).json({ success: false, message: 'السائق غير موجود' });
     }
+    if (!driver.region) {
+      return res.status(400).json({ success: false, message: 'لم يتم تعيين منطقة عمل لك بعد، تواصل مع الإدارة' });
+    }
 
     // تحديث ذري (findOneAndUpdate بشرط مسبق) بدل قراءة ثم حفظ، لمنع سباق
     // حقيقي بين سائقين يقبلون نفس الطلب بنفس اللحظة — النسخة القديمة كانت
     // تقرأ الطلب ثم تتحقق ثم تحفظ بخطوات منفصلة، وهذا يسمح نظرياً لطلبين
-    // قبول متزامنين يجتازون التحقق قبل ما يحفظ أي منهم
+    // قبول متزامنين يجتازون التحقق قبل ما يحفظ أي منهم. شرط المنطقة هنا
+    // بنفس الاستعلام الذري يمنع سائق يقبل طلب خارج منطقته حتى لو عدّل تطبيقه
     const order = await Order.findOneAndUpdate(
-      { _id: req.params.id, driver: null, status: { $in: ['pending', 'preparing', 'ready'] } },
+      { _id: req.params.id, driver: null, status: { $in: ['pending', 'preparing', 'ready'] }, region: driver.region },
       { $set: { driver: driverId, status: 'accepted', acceptedAt: Date.now() } },
       { new: true }
     );
@@ -524,6 +555,9 @@ router.put('/:id/accept', async (req, res) => {
       if (existing.driver) {
         console.log('Order already has a driver assigned:', existing.driver);
         return res.status(400).json({ success: false, message: 'تم استلام هذا الطلب من قبل سائق آخر' });
+      }
+      if (existing.region && existing.region.toString() !== driver.region.toString()) {
+        return res.status(403).json({ success: false, message: 'هذا الطلب خارج منطقة عملك المخصصة' });
       }
       console.log('Order status is invalid:', existing.status);
       return res.status(400).json({ success: false, message: 'هذا الطلب تم قبوله بالفعل أو ملغى' });

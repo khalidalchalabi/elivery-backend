@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { sendPushToUser } = require('../utils/sendPushNotification');
 const { saveBase64Image } = require('../utils/imageUpload');
+const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
 
 // @desc    جلب كافة المحلات من قاعدة البيانات
 // @route   GET /api/shops
@@ -20,7 +21,8 @@ router.get('/', async (req, res) => {
     // withImages=false تُرجع بيانات المحلات بدون صورة البانر (حمولة صغيرة
     // وفورية تقريباً)، ثم تُجلب الصور فوراً بعدها بدفعة واحدة عبر GET /images
     const withImages = req.query.withImages !== 'false';
-    let query = Shop.find().sort({ createdAt: -1 });
+    const { region } = req.query;
+    let query = Shop.find(region ? { region } : {}).sort({ createdAt: -1 });
     if (!withImages) {
       query = query.select('-imagePath');
     }
@@ -56,7 +58,7 @@ router.get('/images', async (req, res) => {
 // @route   POST /api/shops
 router.post('/', async (req, res) => {
   try {
-    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude, discountPercentage, minOrderAmountForDiscount } = req.body;
+    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude, discountPercentage, minOrderAmountForDiscount, regionId } = req.body;
 
     let shopExists = await Shop.findOne({ name });
     if (shopExists) {
@@ -73,6 +75,16 @@ router.post('/', async (req, res) => {
       };
     }
 
+    // تحديد منطقة المحل: المرسلة من الإدارة، وإلا استنتاج أقرب منطقة من
+    // الإحداثيات، وإلا المنطقة الافتراضية — حتى لا يبقى محل بلا منطقة
+    let resolvedRegionId = regionId || null;
+    if (!resolvedRegionId && latitude !== undefined && longitude !== undefined) {
+      const nearest = await findNearestRegion(parseFloat(latitude), parseFloat(longitude));
+      resolvedRegionId = nearest ? nearest._id : await getDefaultRegionId();
+    } else if (!resolvedRegionId) {
+      resolvedRegionId = await getDefaultRegionId();
+    }
+
     const shop = new Shop({
       name,
       description,
@@ -83,6 +95,7 @@ router.post('/', async (req, res) => {
       categories,
       discountPercentage: discountPercentage ? parseFloat(discountPercentage) : 0,
       minOrderAmountForDiscount: minOrderAmountForDiscount ? parseFloat(minOrderAmountForDiscount) : 0,
+      region: resolvedRegionId,
       ...(location && { location })
     });
 
@@ -118,7 +131,7 @@ router.delete('/:id', async (req, res) => {
 // @route   PUT /api/shops/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount } = req.body;
+    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount, regionId } = req.body;
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
@@ -135,6 +148,7 @@ router.put('/:id', async (req, res) => {
     if (isOpen !== undefined) shop.isOpen = isOpen;
     if (discountPercentage !== undefined) shop.discountPercentage = parseFloat(discountPercentage);
     if (minOrderAmountForDiscount !== undefined) shop.minOrderAmountForDiscount = parseFloat(minOrderAmountForDiscount);
+    if (regionId !== undefined) shop.region = regionId || null;
 
     if (latitude !== undefined && longitude !== undefined) {
       shop.location = {
