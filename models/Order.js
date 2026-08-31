@@ -17,6 +17,12 @@ const OrderSchema = new mongoose.Schema(
       ref: 'Shop',
       default: null,
     },
+    // تُشتق من منطقة المحل بالسيرفر وقت إنشاء الطلب (غير موثوقة من العميل)
+    region: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Region',
+      default: null,
+    },
     items: [
       {
         name: { type: String, required: true },
@@ -169,6 +175,7 @@ OrderSchema.index({ dropoffLocation: '2dsphere' });
 OrderSchema.index({ customer: 1, createdAt: -1 });
 OrderSchema.index({ driver: 1, status: 1 });
 OrderSchema.index({ shop: 1, status: 1, createdAt: -1 });
+OrderSchema.index({ region: 1, status: 1 });
 OrderSchema.index({ groupOrderId: 1 });
 
 module.exports = mongoose.model('Order', OrderSchema);

@@ -65,6 +65,11 @@ const ShopSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    region: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Region',
+      default: null,
+    },
   },
   {
     timestamps: true,

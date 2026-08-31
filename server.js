@@ -11,6 +11,7 @@ dotenv.config();
 // الاتصال بقاعدة البيانات MongoDB
 connectDB().then(() => {
   seedDefaultCategories();
+  seedDefaultRegionAndBackfill();
 });
 
 // دالة لتغذية قاعدة البيانات تلقائياً بالأقسام الافتراضية
@@ -30,6 +31,46 @@ async function seedDefaultCategories() {
     }
   } catch (err) {
     console.error('Error seeding categories:', err);
+  }
+}
+
+// دالة idempotent تشتغل كل إقلاع: تضمن وجود منطقة افتراضية واحدة (بنفس مركز
+// الخالص الافتراضي القديم ونفس قيمة delivery_radius الحالية)، وتهاجر أي محل/
+// سائق/طلب بلا منطقة إليها — آمنة تشتغل بالتوازي مع حركة حية بدون أي نافذة صيانة
+async function seedDefaultRegionAndBackfill() {
+  try {
+    const Region = require('./models/Region');
+    const Shop = require('./models/Shop');
+    const User = require('./models/User');
+    const Order = require('./models/Order');
+    const Setting = require('./models/Setting');
+    const { DEFAULT_REGION_NAME } = require('./utils/regionHelper');
+
+    let defaultRegion = await Region.findOne({ name: DEFAULT_REGION_NAME });
+    if (!defaultRegion) {
+      const radiusSetting = await Setting.findOne({ key: 'delivery_radius' });
+      const radiusKm = radiusSetting && typeof radiusSetting.value === 'number' ? radiusSetting.value : 15.0;
+      defaultRegion = await Region.create({
+        name: DEFAULT_REGION_NAME,
+        center: { type: 'Point', coordinates: [44.5241, 33.8245] }, // نفس Shop.location الافتراضي
+        radiusKm,
+        isActive: true,
+      });
+      console.log('[region-migration] created default region:', defaultRegion._id.toString());
+    }
+
+    const [shopResult, driverResult, orderResult] = await Promise.all([
+      Shop.updateMany({ region: null }, { $set: { region: defaultRegion._id } }),
+      User.updateMany({ role: 'driver', region: null }, { $set: { region: defaultRegion._id } }),
+      Order.updateMany({ region: null }, { $set: { region: defaultRegion._id } }),
+    ]);
+    if (shopResult.modifiedCount || driverResult.modifiedCount || orderResult.modifiedCount) {
+      console.log(
+        `[region-migration] backfilled: ${shopResult.modifiedCount} shops, ${driverResult.modifiedCount} drivers, ${orderResult.modifiedCount} orders`
+      );
+    }
+  } catch (err) {
+    console.error('[region-migration] error:', err);
   }
 }
 
@@ -64,6 +105,7 @@ app.use('/api/promo', require('./routes/promo'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/complaints', require('./routes/complaints'));
+app.use('/api/regions', require('./routes/regions'));
 
 // خدمة الملفات المرفوعة بشكل استاتيكي
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));

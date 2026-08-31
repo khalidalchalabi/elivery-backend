@@ -37,6 +37,12 @@ const UserSchema = new mongoose.Schema(
       ref: 'Shop',
       default: null,
     },
+    // منطقة عمل السائق (إلزامية للسائقين) — يحددها الإدارة، تقيّد أي طلب يقدر يستلمه
+    region: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Region',
+      default: null,
+    },
     isActive: {
       type: Boolean,
       default: true,
