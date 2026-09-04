@@ -323,8 +323,22 @@ router.get('/dashboard/stats', async (req, res) => {
     const completedCount = await Order.countDocuments({ status: 'completed' });
     const cancelledCount = await Order.countDocuments({ status: 'cancelled' });
 
+    // توزيع دقيق لكل حالة طلب على حدة (لعرض تفاصيل أكثر بلوحات المعلومات)
+    const statusList = [
+      'awaiting_verification', 'pending', 'preparing', 'ready',
+      'accepted', 'picking_up', 'delivering', 'completed', 'cancelled',
+    ];
+    const statusCounts = await Order.aggregate([
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]);
+    const statusBreakdown = {};
+    statusList.forEach((s) => { statusBreakdown[s] = 0; });
+    statusCounts.forEach((row) => {
+      if (row._id in statusBreakdown) statusBreakdown[row._id] = row.count;
+    });
+
     const completedOrders = await Order.find({ status: 'completed' });
-    
+
     let totalRevenue = 0;
     let totalItemsPrice = 0;
     let totalDeliveryFees = 0;
@@ -355,6 +369,25 @@ router.get('/dashboard/stats', async (req, res) => {
       }
     });
 
+    // إحصائيات اليوم الحالي فقط (كل الطلبات المنشأة اليوم، بغض النظر عن حالتها)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayOrders = await Order.find({ createdAt: { $gte: startOfToday } });
+    const todayOrdersCount = todayOrders.length;
+    const todayCompletedCount = todayOrders.filter((o) => o.status === 'completed').length;
+    const todayCancelledCount = todayOrders.filter((o) => o.status === 'cancelled').length;
+    const todayRevenue = todayOrders
+      .filter((o) => o.status === 'completed')
+      .reduce((sum, o) => sum + (o.priceDetails?.totalPrice || 0), 0);
+
+    // عدد السائقين المتصلين/المتاحين حالياً لاستلام طلبات
+    const onlineDriversCount = await User.countDocuments({
+      role: 'driver',
+      isActive: true,
+      'driverDetails.isAvailable': true,
+    });
+    const totalDriversCount = await User.countDocuments({ role: 'driver' });
+
     res.status(200).json({
       success: true,
       data: {
@@ -364,6 +397,17 @@ router.get('/dashboard/stats', async (req, res) => {
           active: activeCount,
           completed: completedCount,
           cancelled: cancelledCount,
+        },
+        statusBreakdown,
+        today: {
+          ordersCount: todayOrdersCount,
+          completedCount: todayCompletedCount,
+          cancelledCount: todayCancelledCount,
+          revenue: todayRevenue,
+        },
+        drivers: {
+          online: onlineDriversCount,
+          total: totalDriversCount,
         },
         financials: {
           totalRevenue,
