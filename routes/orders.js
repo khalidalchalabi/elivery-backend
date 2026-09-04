@@ -286,6 +286,23 @@ router.post('/', async (req, res) => {
 
     await order.save();
 
+    // إشعار فوري لصاحب المحل (تاجر) بوصول طلب جديد — لا يوقف الاستجابة للعميل
+    // إذا فشل الإرسال (Firebase غير مهيّأ، أو التاجر ما سجّل رمز جهازه بعد)
+    if (finalShopId) {
+      User.find({ shop: finalShopId, role: { $in: ['merchant', 'shop'] } })
+        .then((merchants) => {
+          const displayId = order._id.toString().slice(-6).toUpperCase();
+          merchants.forEach((merchant) =>
+            sendPushToUser(merchant, {
+              title: 'طلب جديد 🛎️',
+              body: `وصلك طلب جديد #${displayId} بقيمة ${itemsPriceNum} د.ع`,
+              data: { orderId: order._id.toString(), type: 'new_order' },
+            })
+          );
+        })
+        .catch((err) => console.error('فشل إشعار التاجر بالطلب الجديد:', err.message));
+    }
+
     res.status(201).json({
       success: true,
       message: 'تم إنشاء الطلب بنجاح وهو بانتظار قبول السائق',
