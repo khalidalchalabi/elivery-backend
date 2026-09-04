@@ -11,6 +11,10 @@ async function sendPushToUser(user, { title, body, data = {} } = {}) {
     await getMessaging().send({
       token: user.fcmToken,
       notification: { title, body },
+      // priority: high + صوت افتراضي صريح، حتى توصل الإشعارات فوراً وبصوت
+      // حتى لو التطبيق مسكر بالكامل بالخلفية (وليس بس مفتوح بالمقدمة)
+      android: { priority: 'high', notification: { sound: 'default' } },
+      apns: { payload: { aps: { sound: 'default' } } },
       data: Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, String(v)])
       ),
@@ -31,6 +35,8 @@ async function sendPushToTopic(topic, { title, body, data = {} } = {}) {
     await getMessaging().send({
       topic,
       notification: { title, body },
+      android: { priority: 'high', notification: { sound: 'default' } },
+      apns: { payload: { aps: { sound: 'default' } } },
       data: Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, String(v)])
       ),
