@@ -589,7 +589,10 @@ router.put('/:id/accept', async (req, res) => {
     const driver = await User.findById(driverId);
     if (!driver || driver.role !== 'driver') {
       console.log('Driver not found or not driver role');
-      return res.status(404).json({ success: false, message: 'السائق غير موجود' });
+      return res.status(404).json({ success: false, message: 'السائق غير موجود', accountRevoked: true });
+    }
+    if (!driver.isActive) {
+      return res.status(403).json({ success: false, message: 'تم إيقاف هذا الحساب من قبل الإدارة', accountRevoked: true });
     }
     if (!driver.region) {
       return res.status(400).json({ success: false, message: 'لم يتم تعيين منطقة عمل لك بعد، تواصل مع الإدارة' });
