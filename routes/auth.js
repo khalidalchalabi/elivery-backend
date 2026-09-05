@@ -328,11 +328,14 @@ router.post('/employee', async (req, res) => {
 
     const finalEmail = (email && email.trim()) ? email.trim() : `${role}_${phone}_${Date.now()}@local.com`;
 
+    // الفحص يقارن رقم الهاتف بنفس دور الموظف الجديد فقط (مطابقةً للفهرس المركّب
+    // phone+role بقاعدة البيانات) — حتى يصير مسموح لنفس الرقم يكون مسجّل
+    // كزبون بتطبيق العميل ومنفصلاً كموظف بتطبيق الكادر بنفس الوقت
     let userExists = await User.findOne({
-      $or: [{ phone }, { email: finalEmail }]
+      $or: [{ phone, role }, { email: finalEmail }]
     });
     if (userExists) {
-      return res.status(400).json({ success: false, message: 'رقم الهاتف أو البريد الإلكتروني مسجل بالفعل' });
+      return res.status(400).json({ success: false, message: 'رقم الهاتف أو البريد الإلكتروني مسجل بالفعل بنفس هذا الدور الوظيفي' });
     }
 
     const driverAddr = address || driverDetails?.address || '';
