@@ -1,10 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const PromoCode = require('../models/PromoCode');
 const { getDefaultRegionId } = require('../utils/regionHelper');
+
+// يتحقق من كلمة المرور بما يتوافق مع الحسابات القديمة غير المشفّرة (قبل
+// إضافة bcrypt) — لو كانت مشفّرة يقارنها بالطريقة الآمنة، ولو نص صريح
+// يقارنها مباشرة ويشفّرها فوراً عند التطابق (ترقية تدريجية دون تجميد أي حساب)
+async function verifyPassword(user, plainPassword) {
+  if (!user.password || !plainPassword) return false;
+  if (user.password.startsWith('$2')) {
+    return bcrypt.compare(plainPassword, user.password);
+  }
+  const matches = user.password === plainPassword;
+  if (matches) {
+    user.password = plainPassword;
+    await user.save();
+  }
+  return matches;
+}
 
 async function logSecurityEvent(userId, username, role, action, details, req) {
   try {
@@ -77,7 +94,7 @@ router.post('/customer/login', async (req, res) => {
       return res.status(404).json({ success: false, message: 'رقم الهاتف غير مسجل كزبون' });
     }
 
-    if (user.password !== password) {
+    if (!(await verifyPassword(user, password))) {
       return res.status(401).json({ success: false, message: 'كلمة المرور غير صحيحة' });
     }
 
@@ -173,7 +190,7 @@ router.post('/login', async (req, res) => {
     }
 
     // التحقق من كلمة المرور
-    if (user.password !== password) {
+    if (!(await verifyPassword(user, password))) {
       await logSecurityEvent(user._id, user.name || user.email, user.role, 'login_failure', 'محاولة دخول فاشلة: كلمة مرور غير مطابقة', req);
       return res.status(401).json({ success: false, message: 'كلمة المرور غير صحيحة' });
     }
@@ -480,7 +497,7 @@ router.delete('/employee/:id', async (req, res) => {
 // @route   GET /api/auth/employees
 router.get('/employees', async (req, res) => {
   try {
-    const employees = await User.find({ role: { $in: ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'] } }).populate('shop', 'name').populate('region', 'name').sort({ createdAt: -1 });
+    const employees = await User.find({ role: { $in: ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'] } }).select('-password').populate('shop', 'name').populate('region', 'name').sort({ createdAt: -1 });
     res.status(200).json({ success: true, count: employees.length, data: employees });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -781,7 +798,7 @@ router.put('/users/:id/change-password', async (req, res) => {
       return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
     }
 
-    if (user.password !== currentPassword) {
+    if (!(await verifyPassword(user, currentPassword))) {
       return res.status(400).json({ success: false, message: 'كلمة المرور الحالية غير صحيحة' });
     }
 
