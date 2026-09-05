@@ -38,6 +38,34 @@ router.post('/', async (req, res) => {
           data: { type: 'support_message' },
         }))
         .catch(() => {});
+    } else {
+      // رسالة من سائق أو زبون: نشعر موظف الدعم المستلم للمحادثة تحديداً إذا
+      // كانت مستلمة، وإلا كل موظفي الدعم (لأي منهم يقدر يستلمها)
+      User.findById(userId)
+        .then(async (user) => {
+          const senderLabel = senderRole === 'driver' ? 'سائق' : 'زبون';
+          const body = text.length > 80 ? `${text.substring(0, 80)}...` : text;
+          if (user && user.assignedSupport) {
+            const agent = await User.findById(user.assignedSupport);
+            if (agent) {
+              sendPushToUser(agent, {
+                title: `رسالة جديدة من ${senderLabel} 💬`,
+                body,
+                data: { type: 'driver_message', userId: userId.toString() },
+              });
+            }
+            return;
+          }
+          const supportStaff = await User.find({ role: 'support' });
+          supportStaff.forEach((agent) =>
+            sendPushToUser(agent, {
+              title: `رسالة جديدة من ${senderLabel} 💬`,
+              body,
+              data: { type: 'driver_message', userId: userId.toString() },
+            })
+          );
+        })
+        .catch(() => {});
     }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
