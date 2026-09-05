@@ -240,12 +240,27 @@ router.get('/stats', async (req, res) => {
     const totalDrivers = await User.countDocuments({ role: 'driver' });
     const totalSupport = await User.countDocuments({ role: 'support' });
     
-    // حساب الأرباح الكلية وعدد الطلبات
+    // ربح المنصة الفعلي = عمولة التوصيل (20% من أجور التوصيل لكل الطلبات) +
+    // عمولة اختيارية من قيمة مواد كل محل (حسب appCommissionPercent الخاص فيه،
+    // افتراضياً صفر لو المحل ما فعّلها). لاحظ: كان هذا الحساب يعتمد خطأً على
+    // حقل order.totalPaid غير الموجود أصلاً بالنموذج، فكانت النتيجة صفر دايماً
     const orders = await Order.find({ status: 'completed' });
+    const Shop = require('../models/Shop');
+    const shops = await Shop.find().select('appCommissionPercent').lean();
+    const shopCommissionMap = {};
+    shops.forEach(s => { shopCommissionMap[s._id.toString()] = s.appCommissionPercent || 0; });
+
     let totalRevenue = 0;
     orders.forEach(order => {
-      totalRevenue += (order.totalPaid || 0);
+      const deliveryFee = order.priceDetails?.deliveryFee || 0;
+      totalRevenue += deliveryFee * 0.2;
+
+      const itemsPrice = order.priceDetails?.itemsPrice || 0;
+      const shopId = order.shop ? order.shop.toString() : null;
+      const commissionPercent = shopId ? (shopCommissionMap[shopId] || 0) : 0;
+      totalRevenue += itemsPrice * (commissionPercent / 100);
     });
+    totalRevenue = Math.round(totalRevenue);
 
     res.status(200).json({
       success: true,
@@ -545,6 +560,7 @@ router.get('/financials/shops', async (req, res) => {
         name: s.name,
         totalSales: 0,
         totalOrders: 0,
+        commissionPercent: s.appCommissionPercent || 0,
         commission: 0,
         unpaidBalance: 0,
       };
@@ -561,10 +577,12 @@ router.get('/financials/shops', async (req, res) => {
       }
     });
 
-    // تم إلغاء عمولة المنصة 5% بالكامل (وأجور التطبيق 5% عن الزبون أيضاً) —
-    // المحل يستحق كامل قيمة مبيعاته بدون أي اقتطاع
+    // عمولة التطبيق من المحل اختيارية (appCommissionPercent) — افتراضياً صفر،
+    // أي المحل يستحق كامل قيمة مبيعاته إلا لو الإدارة فعّلت نسبة له تحديداً
     Object.keys(shopStats).forEach(id => {
-      shopStats[id].unpaidBalance = Math.round(shopStats[id].totalSales);
+      const s = shopStats[id];
+      s.commission = Math.round(s.totalSales * (s.commissionPercent / 100));
+      s.unpaidBalance = Math.round(s.totalSales - s.commission);
     });
 
     res.status(200).json({ success: true, data: Object.values(shopStats) });
