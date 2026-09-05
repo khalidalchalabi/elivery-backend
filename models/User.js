@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const UserSchema = new mongoose.Schema(
   {
@@ -157,5 +158,16 @@ UserSchema.index({ 'driverDetails.currentLocation': '2dsphere' });
 // فريد على مستوى (الهاتف + الدور) وليس الهاتف وحده، حتى يقدر نفس الشخص
 // (مثلاً موظف بالكادر) يملك حساب زبون منفصل بنفس رقم هاتفه لأغراض العمل
 UserSchema.index({ phone: 1, role: 1 }, { unique: true });
+
+// يشفّر كلمة المرور تلقائياً بأي حفظ (تسجيل جديد، تغيير كلمة مرور، إنشاء
+// موظف...) قبل تخزينها — يتحقق أولاً من عدم كونها مشفّرة أصلاً (تبدأ بـ $2،
+// بصمة bcrypt المميزة) حتى ما يعيد تشفير قيمة مشفّرة أصلاً بالخطأ لو انحفظ
+// المستند مرة ثانية بدون تعديل كلمة المرور فعلياً
+UserSchema.pre('save', async function (next) {
+  if (this.isModified('password') && this.password && !this.password.startsWith('$2')) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
+});
 
 module.exports = mongoose.model('User', UserSchema);
