@@ -203,7 +203,12 @@ router.put('/driver/location/:id', async (req, res) => {
 
     const user = await User.findById(req.params.id);
     if (!user || user.role !== 'driver') {
-      return res.status(404).json({ success: false, message: 'السائق غير موجود' });
+      // accountRevoked تخلي تطبيق الكادر يسجّل خروج السائق تلقائياً فوراً —
+      // مهم خصوصاً لو الإدارة حذفت حسابه وهو مسجّل دخول أصلاً بجهازه
+      return res.status(404).json({ success: false, message: 'السائق غير موجود', accountRevoked: true });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, message: 'تم إيقاف هذا الحساب من قبل الإدارة', accountRevoked: true });
     }
 
     // تحديث الموقع الجغرافي والتوفر
