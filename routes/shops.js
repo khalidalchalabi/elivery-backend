@@ -425,27 +425,33 @@ router.get('/:shopId/financials', async (req, res) => {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
     }
 
-    // 1. حساب مبيعات المحل الكلية من الطلبات المكتملة
+    // 1. حساب مبيعات المحل الكلية من الطلبات المكتملة (سعر المواد فقط)
     const completedOrders = await Order.find({ shop: shopId, status: 'completed' });
     let totalEarnings = 0;
     completedOrders.forEach(order => {
       totalEarnings += order.priceDetails?.itemsPrice || 0;
     });
 
-    // 2. حساب مجموع المدفوعات المسلمة كاش (المؤكدة فقط)
+    // 2. عمولة التطبيق الاختيارية من هذا المحل تحديداً (0 افتراضياً)
+    const commissionPercent = shop.appCommissionPercent || 0;
+    const commission = Math.round(totalEarnings * (commissionPercent / 100));
+
+    // 3. حساب مجموع المدفوعات المسلمة كاش (المؤكدة فقط)
     const payouts = await Payout.find({ shop: shopId, status: 'confirmed' });
     let totalPaid = 0;
     payouts.forEach(payout => {
       totalPaid += payout.amount || 0;
     });
 
-    // 3. المستحقات المتبقية
-    const remainingDues = totalEarnings - totalPaid;
+    // 4. المستحقات المتبقية = المبيعات ناقص عمولة التطبيق ناقص ما استُلم فعلاً
+    const remainingDues = totalEarnings - commission - totalPaid;
 
     res.status(200).json({
       success: true,
       data: {
         totalEarnings,
+        commissionPercent,
+        commission,
         totalPaid,
         remainingDues,
       }
