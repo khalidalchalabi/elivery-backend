@@ -548,11 +548,17 @@ router.delete('/promo/:id', async (req, res) => {
 router.get('/financials/shops', async (req, res) => {
   try {
     const Shop = require('../models/Shop');
+    const Payout = require('../models/Payout');
     const shops = await Shop.find().lean();
-    
-    // جلب جميع الطلبات المكتملة غير المسواة للمحلات
-    const orders = await Order.find({ status: 'completed', isSettledShop: { $ne: true } }).lean();
-    
+
+    // مصدر الحقيقة الوحيد لمستحقات المحل: كل الطلبات المكتملة تاريخياً ناقص
+    // الدفعات المؤكدة فقط من التاجر (نفس الحساب المستخدم بصفحة التاجر نفسه
+    // عبر /shops/:shopId/financials) — بدل الاعتماد على علم isSettledShop
+    // القديم اللي كان يصفّر الحساب من طرف الإدارة وحدها بدون أي تأكيد فعلي
+    // من التاجر إنه استلم المبلغ
+    const orders = await Order.find({ status: 'completed' }).lean();
+    const payouts = await Payout.find({ status: 'confirmed', shop: { $ne: null } }).lean();
+
     const shopStats = {};
     shops.forEach(s => {
       shopStats[s._id.toString()] = {
@@ -562,6 +568,7 @@ router.get('/financials/shops', async (req, res) => {
         totalOrders: 0,
         commissionPercent: s.appCommissionPercent || 0,
         commission: 0,
+        totalPaid: 0,
         unpaidBalance: 0,
       };
     });
@@ -577,12 +584,19 @@ router.get('/financials/shops', async (req, res) => {
       }
     });
 
+    payouts.forEach(p => {
+      const shopId = p.shop ? p.shop.toString() : null;
+      if (shopId && shopStats[shopId]) {
+        shopStats[shopId].totalPaid += p.amount || 0;
+      }
+    });
+
     // عمولة التطبيق من المحل اختيارية (appCommissionPercent) — افتراضياً صفر،
     // أي المحل يستحق كامل قيمة مبيعاته إلا لو الإدارة فعّلت نسبة له تحديداً
     Object.keys(shopStats).forEach(id => {
       const s = shopStats[id];
       s.commission = Math.round(s.totalSales * (s.commissionPercent / 100));
-      s.unpaidBalance = Math.round(s.totalSales - s.commission);
+      s.unpaidBalance = Math.round(s.totalSales - s.commission - s.totalPaid);
     });
 
     res.status(200).json({ success: true, data: Object.values(shopStats) });
