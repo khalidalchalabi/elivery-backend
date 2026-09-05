@@ -17,7 +17,10 @@ async function verifyPassword(user, plainPassword) {
   }
   const matches = user.password === plainPassword;
   if (matches) {
-    user.password = plainPassword;
+    // نشفّرها هنا مباشرة (بدل الاعتماد على isModified بالـ pre-save hook)
+    // لأن إسناد نفس القيمة الصريحة اللي كانت موجودة أصلاً قد لا يُعتبر
+    // "تعديلاً" بنظر Mongoose، فتضل كلمة المرور غير مشفّرة رغم نجاح الحفظ
+    user.password = await bcrypt.hash(plainPassword, 10);
     await user.save();
   }
   return matches;
