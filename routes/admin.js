@@ -373,7 +373,12 @@ router.put('/users/:id/loyalty-points', async (req, res) => {
 router.get('/customer-profile/:id', async (req, res) => {
   try {
     const userId = req.params.id;
-    let customer = await User.findById(userId).select('-password');
+    // findById على قيمة مو بصيغة ObjectId صالحة (مثلاً رقم هاتف) يرمي استثناء
+    // فوراً بدل ما يرجع null — فيمنع وصول الكود للبحث الاحتياطي بالهاتف تحت.
+    // نتحقق من صحة الصيغة أول قبل أي استعلام
+    let customer = mongoose.Types.ObjectId.isValid(userId)
+      ? await User.findById(userId).select('-password')
+      : null;
     if (!customer) {
       // البحث برقم الهاتف إذا لم يكن ID
       customer = await User.findOne({ phone: userId, role: 'customer' }).select('-password');
