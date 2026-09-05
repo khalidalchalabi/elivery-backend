@@ -303,6 +303,23 @@ router.post('/', async (req, res) => {
         .catch((err) => console.error('فشل إشعار التاجر بالطلب الجديد:', err.message));
     }
 
+    // إشعار فوري لكل موظفي الدعم الفني بطلب جديد "بانتظار التحقق" (أول طلب
+    // لزبون جديد) — يحتاج مراجعة يدوية من الدعم قبل ما يوصل للمحل والسائقين
+    if (order.status === 'awaiting_verification') {
+      User.find({ role: 'support' })
+        .then((supportStaff) => {
+          const displayId = order._id.toString().slice(-6).toUpperCase();
+          supportStaff.forEach((agent) =>
+            sendPushToUser(agent, {
+              title: 'طلب جديد بانتظار التحقق ⏳',
+              body: `طلب #${displayId} من زبون جديد يحتاج مراجعتك`,
+              data: { orderId: order._id.toString(), type: 'awaiting_verification' },
+            })
+          );
+        })
+        .catch((err) => console.error('فشل إشعار الدعم الفني بطلب التحقق:', err.message));
+    }
+
     res.status(201).json({
       success: true,
       message: 'تم إنشاء الطلب بنجاح وهو بانتظار قبول السائق',
