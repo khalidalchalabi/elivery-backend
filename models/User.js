@@ -163,11 +163,12 @@ UserSchema.index({ phone: 1, role: 1 }, { unique: true });
 // موظف...) قبل تخزينها — يتحقق أولاً من عدم كونها مشفّرة أصلاً (تبدأ بـ $2،
 // بصمة bcrypt المميزة) حتى ما يعيد تشفير قيمة مشفّرة أصلاً بالخطأ لو انحفظ
 // المستند مرة ثانية بدون تعديل كلمة المرور فعلياً
-UserSchema.pre('save', async function (next) {
+// ملاحظة: ماخذ next كمعامل ولا نستدعيه — Mongoose 9 ما يمرر دالة next حقيقية
+// للـ hooks غير المتزامنة (async)، ويكتفي بانتظار الـ Promise المرجوعة تلقائياً
+UserSchema.pre('save', async function () {
   if (this.isModified('password') && this.password && !this.password.startsWith('$2')) {
     this.password = await bcrypt.hash(this.password, 10);
   }
-  next();
 });
 
 module.exports = mongoose.model('User', UserSchema);
