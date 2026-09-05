@@ -58,7 +58,7 @@ router.get('/images', async (req, res) => {
 // @route   POST /api/shops
 router.post('/', async (req, res) => {
   try {
-    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude, discountPercentage, minOrderAmountForDiscount, regionId } = req.body;
+    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent } = req.body;
 
     let shopExists = await Shop.findOne({ name });
     if (shopExists) {
@@ -95,6 +95,7 @@ router.post('/', async (req, res) => {
       categories,
       discountPercentage: discountPercentage ? parseFloat(discountPercentage) : 0,
       minOrderAmountForDiscount: minOrderAmountForDiscount ? parseFloat(minOrderAmountForDiscount) : 0,
+      appCommissionPercent: appCommissionPercent ? parseFloat(appCommissionPercent) : 0,
       region: resolvedRegionId,
       ...(location && { location })
     });
@@ -131,7 +132,7 @@ router.delete('/:id', async (req, res) => {
 // @route   PUT /api/shops/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount, regionId } = req.body;
+    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent } = req.body;
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
@@ -148,6 +149,7 @@ router.put('/:id', async (req, res) => {
     if (isOpen !== undefined) shop.isOpen = isOpen;
     if (discountPercentage !== undefined) shop.discountPercentage = parseFloat(discountPercentage);
     if (minOrderAmountForDiscount !== undefined) shop.minOrderAmountForDiscount = parseFloat(minOrderAmountForDiscount);
+    if (appCommissionPercent !== undefined) shop.appCommissionPercent = parseFloat(appCommissionPercent);
     if (regionId !== undefined) shop.region = regionId || null;
 
     if (latitude !== undefined && longitude !== undefined) {
