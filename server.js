@@ -106,6 +106,7 @@ app.use('/api/categories', require('./routes/categories'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/complaints', require('./routes/complaints'));
 app.use('/api/regions', require('./routes/regions'));
+app.use('/api/zones', require('./routes/zones'));
 
 // خدمة الملفات المرفوعة بشكل استاتيكي
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));

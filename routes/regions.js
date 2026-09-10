@@ -3,7 +3,8 @@ const router = express.Router();
 const Region = require('../models/Region');
 const Shop = require('../models/Shop');
 const User = require('../models/User');
-const { findNearestRegion } = require('../utils/regionHelper');
+const { findNearestRegion, buildPolygonFromPoints } = require('../utils/regionHelper');
+const { findZoneForPoint } = require('../utils/zoneHelper');
 
 // @desc    جلب كافة المناطق
 // @route   GET /api/regions?activeOnly=true
@@ -17,7 +18,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-// @desc    أقرب منطقة نشطة تحتوي إحداثيات معينة (يفيد اقتراح المنطقة تلقائياً بنموذج إضافة محل)
+// @desc    أخص "سعر توصيل" ينطبق على إحداثيات معينة: زون داخل منطقة إذا وجد (أدق)،
+//          وإلا المنطقة نفسها إذا إلها سعر ثابت، وإلا null (تطبيق الزبون يعتمد
+//          حساب المسافة الافتراضي). يفيد أيضاً باقتراح المنطقة تلقائياً بنموذج إضافة محل
 // @route   GET /api/regions/nearest?lat=&lng=
 router.get('/nearest', async (req, res) => {
   try {
@@ -25,8 +28,16 @@ router.get('/nearest', async (req, res) => {
     if (lat === undefined || lng === undefined) {
       return res.status(400).json({ success: false, message: 'الرجاء تحديد خط الطول والعرض' });
     }
-    const region = await findNearestRegion(parseFloat(lat), parseFloat(lng));
-    res.json({ success: true, data: region }); // data: null إذا كانت النقطة خارج كل المناطق
+    const parsedLat = parseFloat(lat);
+    const parsedLng = parseFloat(lng);
+
+    const zone = await findZoneForPoint(parsedLat, parsedLng);
+    if (zone) {
+      return res.json({ success: true, data: zone, matchType: 'zone' });
+    }
+
+    const region = await findNearestRegion(parsedLat, parsedLng);
+    res.json({ success: true, data: region, matchType: region ? 'region' : null }); // data: null إذا كانت النقطة خارج كل المناطق والزونات
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -36,8 +47,9 @@ router.get('/nearest', async (req, res) => {
 // @route   POST /api/regions
 router.post('/', async (req, res) => {
   try {
-    const { name, latitude, longitude, radiusKm, isActive, deliveryFee } = req.body;
-    if (!name || latitude === undefined || longitude === undefined || !radiusKm) {
+    const { name, latitude, longitude, radiusKm, isActive, deliveryFee, points } = req.body;
+    const shape = req.body.shape === 'polygon' ? 'polygon' : 'circle';
+    if (!name || (shape === 'circle' && (latitude === undefined || longitude === undefined || !radiusKm))) {
       return res.status(400).json({ success: false, message: 'الرجاء تعبئة كافة بيانات المنطقة' });
     }
     const exists = await Region.findOne({ name });
@@ -45,13 +57,28 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'هذا الاسم مستخدم بالفعل لمنطقة أخرى' });
     }
 
-    const region = new Region({
+    const baseFields = {
       name,
-      center: { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] },
-      radiusKm: parseFloat(radiusKm),
+      shape,
       isActive: isActive !== undefined ? isActive : true,
       deliveryFee: deliveryFee !== undefined && deliveryFee !== null && deliveryFee !== '' ? parseFloat(deliveryFee) : null,
-    });
+    };
+
+    let region;
+    if (shape === 'polygon') {
+      const { coordinates, centroid } = buildPolygonFromPoints(points);
+      region = new Region({
+        ...baseFields,
+        polygon: { type: 'Polygon', coordinates },
+        center: { type: 'Point', coordinates: [centroid.lng, centroid.lat] },
+      });
+    } else {
+      region = new Region({
+        ...baseFields,
+        center: { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] },
+        radiusKm: parseFloat(radiusKm),
+      });
+    }
     await region.save();
     res.status(201).json({ success: true, message: 'تم إضافة المنطقة بنجاح', data: region });
   } catch (error) {
@@ -63,20 +90,31 @@ router.post('/', async (req, res) => {
 // @route   PUT /api/regions/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, latitude, longitude, radiusKm, isActive, deliveryFee } = req.body;
+    const { name, latitude, longitude, radiusKm, isActive, deliveryFee, points } = req.body;
     const region = await Region.findById(req.params.id);
     if (!region) {
       return res.status(404).json({ success: false, message: 'المنطقة غير موجودة' });
     }
 
     if (name) region.name = name;
-    if (radiusKm !== undefined) region.radiusKm = parseFloat(radiusKm);
     if (isActive !== undefined) region.isActive = isActive;
     if (deliveryFee !== undefined) {
       region.deliveryFee = deliveryFee === null || deliveryFee === '' ? null : parseFloat(deliveryFee);
     }
-    if (latitude !== undefined && longitude !== undefined) {
-      region.center = { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] };
+
+    const newShape = req.body.shape === 'polygon' || req.body.shape === 'circle' ? req.body.shape : region.shape;
+    if (newShape === 'polygon' && points !== undefined) {
+      const { coordinates, centroid } = buildPolygonFromPoints(points);
+      region.shape = 'polygon';
+      region.polygon = { type: 'Polygon', coordinates };
+      region.center = { type: 'Point', coordinates: [centroid.lng, centroid.lat] };
+    } else if (newShape === 'circle') {
+      region.shape = 'circle';
+      region.polygon = undefined;
+      if (radiusKm !== undefined) region.radiusKm = parseFloat(radiusKm);
+      if (latitude !== undefined && longitude !== undefined) {
+        region.center = { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] };
+      }
     }
     await region.save();
     res.json({ success: true, message: 'تم تحديث المنطقة بنجاح', data: region });
