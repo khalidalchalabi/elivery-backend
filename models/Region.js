@@ -26,6 +26,12 @@ const RegionSchema = new mongoose.Schema(
       default: 15.0,
       min: [0.1, 'يجب أن يكون النطاق أكبر من صفر'],
     },
+    // سعر توصيل ثابت لهذه المنطقة. null يعني الاعتماد على حساب المسافة الافتراضي بتطبيق الزبون
+    deliveryFee: {
+      type: Number,
+      default: null,
+      min: [0, 'يجب أن يكون السعر صفر أو أكبر'],
+    },
     isActive: {
       type: Boolean,
       default: true,

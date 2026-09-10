@@ -36,7 +36,7 @@ router.get('/nearest', async (req, res) => {
 // @route   POST /api/regions
 router.post('/', async (req, res) => {
   try {
-    const { name, latitude, longitude, radiusKm, isActive } = req.body;
+    const { name, latitude, longitude, radiusKm, isActive, deliveryFee } = req.body;
     if (!name || latitude === undefined || longitude === undefined || !radiusKm) {
       return res.status(400).json({ success: false, message: 'الرجاء تعبئة كافة بيانات المنطقة' });
     }
@@ -50,6 +50,7 @@ router.post('/', async (req, res) => {
       center: { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] },
       radiusKm: parseFloat(radiusKm),
       isActive: isActive !== undefined ? isActive : true,
+      deliveryFee: deliveryFee !== undefined && deliveryFee !== null && deliveryFee !== '' ? parseFloat(deliveryFee) : null,
     });
     await region.save();
     res.status(201).json({ success: true, message: 'تم إضافة المنطقة بنجاح', data: region });
@@ -62,7 +63,7 @@ router.post('/', async (req, res) => {
 // @route   PUT /api/regions/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, latitude, longitude, radiusKm, isActive } = req.body;
+    const { name, latitude, longitude, radiusKm, isActive, deliveryFee } = req.body;
     const region = await Region.findById(req.params.id);
     if (!region) {
       return res.status(404).json({ success: false, message: 'المنطقة غير موجودة' });
@@ -71,6 +72,9 @@ router.put('/:id', async (req, res) => {
     if (name) region.name = name;
     if (radiusKm !== undefined) region.radiusKm = parseFloat(radiusKm);
     if (isActive !== undefined) region.isActive = isActive;
+    if (deliveryFee !== undefined) {
+      region.deliveryFee = deliveryFee === null || deliveryFee === '' ? null : parseFloat(deliveryFee);
+    }
     if (latitude !== undefined && longitude !== undefined) {
       region.center = { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] };
     }
