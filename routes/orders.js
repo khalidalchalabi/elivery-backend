@@ -187,7 +187,10 @@ router.post('/', async (req, res) => {
       scheduledFor,
       shopId,
       groupOrderId,
+      orderType,
+      recipientPhone,
     } = req.body;
+    const finalOrderType = orderType === 'parcel' ? 'parcel' : 'shop';
 
     // دعم كلا التنسيقين (المتداخل والمسطح) لتجنب أخطاء الإرسال
     if (!pickupAddress && req.body.pickupLocation) {
@@ -207,6 +210,9 @@ router.post('/', async (req, res) => {
 
     if (!customerId || !pickupAddress || !dropoffAddress || itemsPrice === undefined || deliveryFee === undefined) {
       return res.status(400).json({ success: false, message: 'الرجاء توفير جميع بيانات الطلب الأساسية' });
+    }
+    if (finalOrderType === 'parcel' && (!recipientPhone || !items || !items.length || !items[0]?.name)) {
+      return res.status(400).json({ success: false, message: 'الرجاء تحديد اسم المادة ورقم هاتف المستلم لطلب البوكس' });
     }
 
     let finalShopId = shopId;
@@ -282,6 +288,8 @@ router.post('/', async (req, res) => {
       shop: finalShopId || null,
       region: resolvedOrderRegion,
       groupOrderId: groupOrderId || null,
+      orderType: finalOrderType,
+      recipientPhone: finalOrderType === 'parcel' ? recipientPhone : null,
     });
 
     await order.save();

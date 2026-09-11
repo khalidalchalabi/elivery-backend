@@ -17,6 +17,18 @@ const OrderSchema = new mongoose.Schema(
       ref: 'Shop',
       default: null,
     },
+    // 'shop': طلب عادي من محل. 'parcel': توصيل طرد من شخص لشخص (بوكس) — بدون محل،
+    // اسم المادة والوزن محفوظين بأول عنصر بـ items، ورقم هاتف المستلم بـ recipientPhone
+    orderType: {
+      type: String,
+      enum: ['shop', 'parcel'],
+      default: 'shop',
+    },
+    // رقم هاتف مستلم الطلب — إلزامي فقط لطلبات البوكس (توصيل من شخص لشخص)
+    recipientPhone: {
+      type: String,
+      default: null,
+    },
     // تُشتق من منطقة المحل بالسيرفر وقت إنشاء الطلب (غير موثوقة من العميل)
     region: {
       type: mongoose.Schema.Types.ObjectId,
@@ -28,6 +40,8 @@ const OrderSchema = new mongoose.Schema(
         name: { type: String, required: true },
         quantity: { type: Number, required: true, default: 1 },
         price: { type: Number, required: true },
+        // وزن المادة بالكيلوغرام — يُستخدم فقط بطلبات البوكس (توصيل طرد)
+        weightKg: { type: Number, default: null },
       },
     ],
     status: {
