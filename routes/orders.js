@@ -8,6 +8,7 @@ const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper
 
 // نصوص إشعارات حالة الطلب بالعربية
 const ORDER_STATUS_NOTIFICATIONS = {
+  accepted: { title: 'سائق قبل طلبك 🚗', body: 'وافق سائق على توصيل طلبك وراح يتحرك قريباً.' },
   preparing: { title: 'طلبك قيد التحضير 👨‍🍳', body: 'المحل بدأ يجهّز طلبك الآن.' },
   ready: { title: 'طلبك جاهز 📦', body: 'طلبك جاهز وبانتظار استلام السائق له.' },
   picking_up: { title: 'السائق بالطريق للمحل 🏍️', body: 'السائق ذاهب لاستلام طلبك من المحل.' },
@@ -15,6 +16,22 @@ const ORDER_STATUS_NOTIFICATIONS = {
   completed: { title: 'تم توصيل طلبك ✅', body: 'وصلك طلبك بنجاح، بالهنا والشفا!' },
   cancelled: { title: 'تم إلغاء طلبك ❌', body: 'تم إلغاء طلبك. تواصل معنا لو عندك أي استفسار.' },
 };
+
+// نفس المراحل، بصياغة تناسب توصيل طرد (بوكس) بدل طلب من محل — ما فيه "تحضير"
+// ولا "محل"، بس استلام وتوصيل مباشر بين نقطتين. نفس تسميات شاشة التتبع بالضبط
+const PARCEL_STATUS_NOTIFICATIONS = {
+  accepted: { title: 'سائق قبل طلب البوكس 🚗', body: 'راح السائق متجه لاستلام طردك قريباً.' },
+  preparing: { title: 'جاري تجهيز طلب البوكس 📦', body: 'راح يتحرك سائق لاستلام طردك قريباً.' },
+  ready: { title: 'طلب البوكس جاهز 📦', body: 'طردك جاهز وبانتظار استلام السائق له.' },
+  picking_up: { title: 'تم استلام البوكس 📦', body: 'السائق استلم طردك من نقطة الاستلام.' },
+  delivering: { title: 'بدء توصيل البوكس 🚀', body: 'السائق بالطريق لتسليم طردك الآن.' },
+  completed: { title: 'تم تسليم البوكس ✅', body: 'توصل طردك بنجاح لمستلمه.' },
+  cancelled: { title: 'تم إلغاء طلب البوكس ❌', body: 'تم إلغاء طلب البوكس. تواصل معنا لو عندك أي استفسار.' },
+};
+
+function getOrderStatusNotification(order, status) {
+  return order.orderType === 'parcel' ? PARCEL_STATUS_NOTIFICATIONS[status] : ORDER_STATUS_NOTIFICATIONS[status];
+}
 
 // @desc    جلب كافة الطلبات في النظام
 // @route   GET /api/orders
@@ -241,13 +258,11 @@ router.post('/', async (req, res) => {
         (await findNearestRegion(parseFloat(pickupLat), parseFloat(pickupLng)))?._id || (await getDefaultRegionId());
     }
 
-    // التحقق من صحة العميل
-    let customer = await User.findById(customerId);
+    // التحقق من صحة العميل — يجب أن يكون نفس الحساب المسجّل دخوله فعلاً،
+    // وإلا يُنسب الطلب (ورقم هاتف "المرسل" وإشعارات الحالة) لزبون عشوائي خطأ
+    const customer = await User.findById(customerId);
     if (!customer) {
-      customer = await User.findOne({ role: 'customer' });
-    }
-    if (!customer) {
-      return res.status(404).json({ success: false, message: 'العميل غير موجود' });
+      return res.status(404).json({ success: false, message: 'العميل غير موجود، الرجاء تسجيل الدخول من جديد' });
     }
     const finalCustomerId = customer._id;
 
@@ -727,7 +742,7 @@ router.put('/:id/status', async (req, res) => {
     });
 
     // إرسال إشعار Push للزبون بحالة طلبه الجديدة (بدون تأخير الاستجابة)
-    const notif = ORDER_STATUS_NOTIFICATIONS[status];
+    const notif = getOrderStatusNotification(order, status);
     if (notif && order.customer) {
       User.findById(order.customer)
         .then((customer) => sendPushToUser(customer, { ...notif, data: { orderId: order._id.toString(), status } }))
