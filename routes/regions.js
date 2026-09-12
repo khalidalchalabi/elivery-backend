@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Region = require('../models/Region');
 const Shop = require('../models/Shop');
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
 // @route   GET /api/regions/nearest?lat=&lng=
 router.get('/nearest', async (req, res) => {
   try {
-    const { lat, lng } = req.query;
+    const { lat, lng, shopId } = req.query;
     if (lat === undefined || lng === undefined) {
       return res.status(400).json({ success: false, message: 'الرجاء تحديد خط الطول والعرض' });
     }
@@ -33,7 +34,17 @@ router.get('/nearest', async (req, res) => {
 
     const zone = await findZoneForPoint(parsedLat, parsedLng);
     if (zone) {
-      return res.json({ success: true, data: zone, matchType: 'zone' });
+      const zoneData = zone.toObject();
+      // سعر توصيل مخصص لهذا المحل بهذا الزون (لو مضبوط بملفه) يتفوّق على سعر
+      // الزون العام — يفيد محل خارج نطاق التسعير الاعتيادي (مدينة ثانية مثلاً)
+      if (shopId && mongoose.Types.ObjectId.isValid(shopId)) {
+        const shop = await Shop.findById(shopId).select('zonePricing');
+        const override = shop?.zonePricing?.find((zp) => zp.zone.toString() === zone._id.toString());
+        if (override) {
+          zoneData.deliveryFee = override.deliveryFee;
+        }
+      }
+      return res.json({ success: true, data: zoneData, matchType: 'zone' });
     }
 
     const region = await findNearestRegion(parsedLat, parsedLng);

@@ -32,10 +32,25 @@ const ShopSchema = new mongoose.Schema(
       type: String,
       default: '15-25 دقيقة',
     },
-    deliveryFee: {
-      type: Number,
-      default: 1000,
-    },
+    // سعر توصيل مخصص من هذا المحل لكل زون على حدة (بدل سعر توصيل أساسي
+    // واحد للمحل كله) — يفيد أكثر شي بمحلات خارج نطاق التسعير الاعتيادي
+    // (مثلاً محل من مدينة ثانية يوصل لمنطقة بعيدة بسعر مختلف عن باقي محلات المنطقة).
+    // لو الزبون بزون ما إله سعر مخصص هنا، يُعتمد سعر الزون العام كالمعتاد
+    zonePricing: [
+      {
+        zone: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Zone',
+          required: true,
+        },
+        deliveryFee: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+        _id: false,
+      },
+    ],
     categories: {
       type: [String],
       default: ['عام'],

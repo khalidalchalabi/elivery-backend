@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
     const query = {};
     if (req.query.region) query.region = req.query.region;
     if (req.query.activeOnly === 'true') query.isActive = true;
-    const zones = await Zone.find(query).sort({ name: 1 });
+    const zones = await Zone.find(query).populate('region', 'name').sort({ name: 1 });
     res.json({ success: true, count: zones.length, data: zones });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

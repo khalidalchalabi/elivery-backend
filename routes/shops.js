@@ -22,7 +22,9 @@ router.get('/', async (req, res) => {
     // وفورية تقريباً)، ثم تُجلب الصور فوراً بعدها بدفعة واحدة عبر GET /images
     const withImages = req.query.withImages !== 'false';
     const { region } = req.query;
-    let query = Shop.find(region ? { region } : {}).sort({ createdAt: -1 });
+    let query = Shop.find(region ? { region } : {})
+      .populate('zonePricing.zone', 'name')
+      .sort({ createdAt: -1 });
     if (!withImages) {
       query = query.select('-imagePath');
     }
@@ -58,7 +60,7 @@ router.get('/images', async (req, res) => {
 // @route   POST /api/shops
 router.post('/', async (req, res) => {
   try {
-    const { name, description, imagePath, rating, deliveryTime, deliveryFee, categories, latitude, longitude, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent } = req.body;
+    const { name, description, imagePath, rating, deliveryTime, categories, latitude, longitude, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent } = req.body;
 
     let shopExists = await Shop.findOne({ name });
     if (shopExists) {
@@ -91,7 +93,6 @@ router.post('/', async (req, res) => {
       imagePath: resolvedImagePath,
       rating,
       deliveryTime,
-      deliveryFee,
       categories,
       discountPercentage: discountPercentage ? parseFloat(discountPercentage) : 0,
       minOrderAmountForDiscount: minOrderAmountForDiscount ? parseFloat(minOrderAmountForDiscount) : 0,
@@ -132,7 +133,7 @@ router.delete('/:id', async (req, res) => {
 // @route   PUT /api/shops/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, imagePath, deliveryFee, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent } = req.body;
+    const { name, description, imagePath, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent, zonePricing } = req.body;
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
@@ -143,8 +144,14 @@ router.put('/:id', async (req, res) => {
     if (name) shop.name = name;
     if (description !== undefined) shop.description = description;
     if (imagePath) shop.imagePath = await saveBase64Image(imagePath, 'shops');
-    if (deliveryFee !== undefined) shop.deliveryFee = deliveryFee;
     if (deliveryTime) shop.deliveryTime = deliveryTime;
+    if (zonePricing !== undefined) {
+      // نتجاهل أي سطر ناقص (بلا زون أو سعر) بدل ما نرفض الطلب كله
+      shop.zonePricing = (Array.isArray(zonePricing) ? zonePricing : [])
+        .filter((zp) => zp && zp.zone && zp.deliveryFee !== undefined && zp.deliveryFee !== null && zp.deliveryFee !== '')
+        .map((zp) => ({ zone: zp.zone, deliveryFee: parseFloat(zp.deliveryFee) }))
+        .filter((zp) => Number.isFinite(zp.deliveryFee) && zp.deliveryFee >= 0);
+    }
     if (categories) shop.categories = categories;
     if (isOpen !== undefined) shop.isOpen = isOpen;
     if (discountPercentage !== undefined) shop.discountPercentage = parseFloat(discountPercentage);
@@ -160,6 +167,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await shop.save();
+    await shop.populate('zonePricing.zone', 'name');
     res.status(200).json({ success: true, message: 'تم تحديث بيانات المحل بنجاح', data: shop });
 
     // إشعار من فضّل هذا المحل عند زيادة نسبة الخصم
