@@ -326,21 +326,29 @@ router.post('/', async (req, res) => {
         .catch((err) => console.error('فشل إشعار التاجر بالطلب الجديد:', err.message));
     }
 
-    // إشعار فوري لكل موظفي الدعم الفني بطلب جديد "بانتظار التحقق" (أول طلب
-    // لزبون جديد) — يحتاج مراجعة يدوية من الدعم قبل ما يوصل للمحل والسائقين
-    if (order.status === 'awaiting_verification') {
+    // إشعار فوري لكل موظفي الدعم الفني بأي طلب جديد — سواء "بانتظار التحقق"
+    // (أول طلب لزبون جديد، يحتاج مراجعة يدوية قبل ما يوصل للمحل والسائقين)
+    // أو طلب عادي (بس تنبيه متابعة، مو مراجعة إلزامية)
+    if (order.status === 'awaiting_verification' || order.status === 'pending') {
+      const isVerification = order.status === 'awaiting_verification';
       User.find({ role: 'support' })
         .then((supportStaff) => {
           const displayId = order._id.toString().slice(-6).toUpperCase();
           supportStaff.forEach((agent) =>
-            sendPushToUser(agent, {
-              title: 'طلب جديد بانتظار التحقق ⏳',
-              body: `طلب #${displayId} من زبون جديد يحتاج مراجعتك`,
-              data: { orderId: order._id.toString(), type: 'awaiting_verification' },
-            })
+            sendPushToUser(agent, isVerification
+              ? {
+                  title: 'طلب جديد بانتظار التحقق ⏳',
+                  body: `طلب #${displayId} من زبون جديد يحتاج مراجعتك`,
+                  data: { orderId: order._id.toString(), type: 'awaiting_verification' },
+                }
+              : {
+                  title: 'طلب جديد 🛎️',
+                  body: `وصل طلب جديد #${displayId} بقيمة ${itemsPriceNum} د.ع`,
+                  data: { orderId: order._id.toString(), type: 'new_order' },
+                })
           );
         })
-        .catch((err) => console.error('فشل إشعار الدعم الفني بطلب التحقق:', err.message));
+        .catch((err) => console.error('فشل إشعار الدعم الفني بالطلب الجديد:', err.message));
     }
 
     res.status(201).json({
