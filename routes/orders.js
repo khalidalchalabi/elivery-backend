@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Order = require('../models/Order');
 const User = require('../models/User');
@@ -232,12 +233,30 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'الرجاء تحديد اسم المادة ورقم هاتف المستلم لطلب البوكس' });
     }
 
+    const Product = require('../models/Product');
     let finalShopId = shopId;
     if (!finalShopId && items && items.length > 0 && items[0].product) {
-      const Product = require('../models/Product');
       const firstProduct = await Product.findById(items[0].product);
       if (firstProduct && firstProduct.shop) {
         finalShopId = firstProduct.shop.toString();
+      }
+    }
+
+    // ننسخ وصف كل منتج (النكهة، الوزن...) داخل الطلب نفسه وقت إنشائه — بدون
+    // هذا، أصناف متشابهة الاسم (مثلاً "جبس" بنكهات مختلفة) تختلط على الكادر
+    // ويضطرون يتصلون بالزبون للاستفسار عن التفاصيل بدل ما تكون واضحة بالطلب
+    if (Array.isArray(items) && items.length > 0) {
+      const productIds = [...new Set(
+        items.filter((it) => it.product && mongoose.Types.ObjectId.isValid(it.product)).map((it) => it.product)
+      )];
+      if (productIds.length > 0) {
+        const products = await Product.find({ _id: { $in: productIds } }).select('description');
+        const descByProductId = {};
+        products.forEach((p) => { descByProductId[p._id.toString()] = p.description || null; });
+        items = items.map((it) => ({
+          ...it,
+          description: it.product ? (descByProductId[it.product.toString()] ?? null) : (it.description || null),
+        }));
       }
     }
 

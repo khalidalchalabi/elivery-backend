@@ -40,6 +40,10 @@ const OrderSchema = new mongoose.Schema(
         name: { type: String, required: true },
         quantity: { type: Number, required: true, default: 1 },
         price: { type: Number, required: true },
+        // وصف المنتج وقت الطلب (النكهة، الوزن...) — منسوخ من المنتج وقت إنشاء
+        // الطلب حتى ما تختلط الأصناف المتشابهة بالاسم (مثلاً "جبس" بنكهات مختلفة)
+        // ويضطر الكادر يتصل بالزبون يستفسر عن التفاصيل
+        description: { type: String, default: null },
         // وزن المادة بالكيلوغرام — يُستخدم فقط بطلبات البوكس (توصيل طرد)
         weightKg: { type: Number, default: null },
       },
