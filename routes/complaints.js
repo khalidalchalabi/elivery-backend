@@ -4,14 +4,15 @@ const Complaint = require('../models/Complaint');
 const Order = require('../models/Order');
 const User = require('../models/User');
 
-// @desc    جلب كل الشكاوى (مع فلترة اختيارية بالحالة أو السائق)
+// @desc    جلب كل الشكاوى (مع فلترة اختيارية بالحالة أو السائق أو الزبون)
 // @route   GET /api/complaints
 router.get('/', async (req, res) => {
   try {
-    const { status, driverId } = req.query;
+    const { status, driverId, customerId } = req.query;
     const query = {};
     if (status) query.status = status;
     if (driverId) query.targetDriver = driverId;
+    if (customerId) query.customer = customerId;
 
     const complaints = await Complaint.find(query)
       .populate('customer', 'name phone')
