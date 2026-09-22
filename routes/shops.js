@@ -8,7 +8,6 @@ const path = require('path');
 const { sendPushToUser } = require('../utils/sendPushNotification');
 const { saveBase64Image } = require('../utils/imageUpload');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
-const { verifyToken, requireRole, requireShopAccess } = require('../middleware/auth');
 
 // @desc    جلب كافة المحلات من قاعدة البيانات
 // @route   GET /api/shops
@@ -59,7 +58,7 @@ router.get('/images', async (req, res) => {
 
 // @desc    إضافة محل جديد (خاص بالمسؤول)
 // @route   POST /api/shops
-router.post('/', verifyToken, requireRole('admin', 'owner'), async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { name, description, imagePath, rating, deliveryTime, categories, latitude, longitude, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent } = req.body;
 
@@ -111,7 +110,7 @@ router.post('/', verifyToken, requireRole('admin', 'owner'), async (req, res) =>
 
 // @desc    حذف محل مع كافة البضائع التابعة له (خاص بالمسؤول)
 // @route   DELETE /api/shops/:id
-router.delete('/:id', verifyToken, requireRole('admin', 'owner'), async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
@@ -130,9 +129,9 @@ router.delete('/:id', verifyToken, requireRole('admin', 'owner'), async (req, re
   }
 });
 
-// @desc    تعديل بيانات محل معين (خاص بالمسؤول أو صاحب المحل نفسه)
+// @desc    تعديل بيانات محل معين (خاص بالمسؤول)
 // @route   PUT /api/shops/:id
-router.put('/:id', verifyToken, requireShopAccess('id'), async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { name, description, imagePath, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent, zonePricing } = req.body;
     const shop = await Shop.findById(req.params.id);
@@ -247,9 +246,9 @@ function normalizeDiscount(price, origP, discP) {
   return { originalPrice: orig, discountPercentage: disc };
 }
 
-// @desc    إضافة منتج/بضاعة جديدة لمحل معين (خاص بالمسؤول أو صاحب المحل)
+// @desc    إضافة منتج/بضاعة جديدة لمحل معين (خاص بالمسؤول)
 // @route   POST /api/shops/:shopId/products
-router.post('/:shopId/products', verifyToken, requireShopAccess('shopId'), async (req, res) => {
+router.post('/:shopId/products', async (req, res) => {
   try {
     const { name, description, price, originalPrice, discountPercentage, category, imagePath, rating } = req.body;
 
@@ -288,17 +287,13 @@ router.post('/:shopId/products', verifyToken, requireShopAccess('shopId'), async
   }
 });
 
-// @desc    حذف منتج معين (خاص بالمسؤول أو صاحب المحل)
+// @desc    حذف منتج معين (خاص بالمسؤول)
 // @route   DELETE /api/shops/products/:id
-router.delete('/products/:id', verifyToken, async (req, res) => {
+router.delete('/products/:id', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'المنتج غير موجود' });
-    }
-    const isStaff = ['admin', 'owner', 'accountant', 'support'].includes(req.user.role);
-    if (!isStaff && (req.user.role !== 'merchant' || req.user.shop !== product.shop.toString())) {
-      return res.status(403).json({ success: false, message: 'ليس لديك صلاحية على هذا المنتج' });
     }
 
     await product.deleteOne();
@@ -308,18 +303,14 @@ router.delete('/products/:id', verifyToken, async (req, res) => {
   }
 });
 
-// @desc    تعديل بضاعة/منتج معين (خاص بالمسؤول أو صاحب المحل)
+// @desc    تعديل بضاعة/منتج معين (خاص بالمسؤول)
 // @route   PUT /api/shops/products/:id
-router.put('/products/:id', verifyToken, async (req, res) => {
+router.put('/products/:id', async (req, res) => {
   try {
     const { name, description, price, originalPrice, discountPercentage, category, imagePath, isAvailable } = req.body;
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'المنتج غير موجود' });
-    }
-    const isStaff = ['admin', 'owner', 'accountant', 'support'].includes(req.user.role);
-    if (!isStaff && (req.user.role !== 'merchant' || req.user.shop !== product.shop.toString())) {
-      return res.status(403).json({ success: false, message: 'ليس لديك صلاحية على هذا المنتج' });
     }
 
     if (name) product.name = name;
@@ -353,7 +344,7 @@ router.put('/products/:id', verifyToken, async (req, res) => {
 
 // @desc    تقييم محل أو مطعم
 // @route   POST /api/shops/:id/rate
-router.post('/:id/rate', verifyToken, async (req, res) => {
+router.post('/:id/rate', async (req, res) => {
   try {
     const { rating } = req.body;
     if (!rating || rating < 1 || rating > 5) {
@@ -396,7 +387,7 @@ const Order = require('../models/Order');
 
 // @desc    تسجيل دفعة مالية جديدة للمحل (خاص بالمسؤول/المالك)
 // @route   POST /api/shops/:shopId/payouts
-router.post('/:shopId/payouts', verifyToken, requireRole('admin', 'owner', 'accountant'), async (req, res) => {
+router.post('/:shopId/payouts', async (req, res) => {
   try {
     const { amount, notes } = req.body;
     if (!amount || amount <= 0) {
@@ -423,7 +414,7 @@ router.post('/:shopId/payouts', verifyToken, requireRole('admin', 'owner', 'acco
 
 // @desc    جلب كافة الدفعات المالية المسجلة للمحل
 // @route   GET /api/shops/:shopId/payouts
-router.get('/:shopId/payouts', verifyToken, requireShopAccess('shopId'), async (req, res) => {
+router.get('/:shopId/payouts', async (req, res) => {
   try {
     const payouts = await Payout.find({ shop: req.params.shopId }).sort({ paidAt: -1 });
     res.status(200).json({ success: true, count: payouts.length, data: payouts });
@@ -434,7 +425,7 @@ router.get('/:shopId/payouts', verifyToken, requireShopAccess('shopId'), async (
 
 // @desc    جلب ملخص مالي كامل للمحل (المبيعات الكلية، المدفوعات، المستحقات المتبقية)
 // @route   GET /api/shops/:shopId/financials
-router.get('/:shopId/financials', verifyToken, requireShopAccess('shopId'), async (req, res) => {
+router.get('/:shopId/financials', async (req, res) => {
   try {
     const shopId = req.params.shopId;
     const shop = await Shop.findById(shopId);
@@ -480,7 +471,7 @@ router.get('/:shopId/financials', verifyToken, requireShopAccess('shopId'), asyn
 
 // @desc    تحديث حالة الدفعة المالية (موافقة/رفض من قبل التاجر)
 // @route   PUT /api/shops/:shopId/payouts/:payoutId
-router.put('/:shopId/payouts/:payoutId', verifyToken, requireShopAccess('shopId'), async (req, res) => {
+router.put('/:shopId/payouts/:payoutId', async (req, res) => {
   try {
     const { status } = req.body;
     if (!['confirmed', 'rejected'].includes(status)) {

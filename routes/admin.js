@@ -13,11 +13,6 @@ const AuditLog = require('../models/AuditLog');
 const { sendPushToUser, sendPushToTopic } = require('../utils/sendPushNotification');
 const { saveBase64Image } = require('../utils/imageUpload');
 const { initFirebaseAdmin } = require('../config/firebaseAdmin');
-const { verifyToken, requireRole } = require('../middleware/auth');
-
-// كل مسار بهذا الملف خاص بالإدارة (أرباح، تسويات مالية، حذف حسابات، سجلات
-// أمان...) — نطبّق التحقق على كل الراوتر دفعة وحدة بدل كل مسار لحاله
-router.use(verifyToken, requireRole('admin', 'owner', 'accountant'));
 
 // دالة مساعدة لضغط صورة base64 كبيرة (مستخدمة بمهمة تنظيف الصور القديمة أدناه فقط)
 async function compressExistingImage(dataUri, maxDimension = 800, quality = 70) {
