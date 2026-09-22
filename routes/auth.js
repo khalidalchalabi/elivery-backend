@@ -48,7 +48,7 @@ async function logSecurityEvent(userId, username, role, action, details, req) {
 // @route   POST /api/auth/customer/register
 router.post('/customer/register', async (req, res) => {
   try {
-    const { name, phone, password } = req.body;
+    const { name, phone, password, referralCode } = req.body;
 
     if (!name || !phone || !password) {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال الاسم، رقم الهاتف وكلمة المرور' });
@@ -62,12 +62,32 @@ router.post('/customer/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'رقم الهاتف مسجل بالفعل كحساب زبون' });
     }
 
+    // رمز إحالة الحساب الجديد يتحدد الآن، ونربطه بمن دعاه (لو أدخل رمز
+    // إحالة صالح) — نتجاهل رمز غير صالح بصمت بدل ما نرفض التسجيل كامل
+    let referredBy = null;
+    if (referralCode && referralCode.trim()) {
+      const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase() });
+      if (referrer) referredBy = referrer._id;
+    }
+
+    let newReferralCode;
+    for (let i = 0; i < 5; i++) {
+      const candidate = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const codeTaken = await User.findOne({ referralCode: candidate });
+      if (!codeTaken) {
+        newReferralCode = candidate;
+        break;
+      }
+    }
+
     const user = new User({
       name,
       phone,
       password,
       role: 'customer',
-      email: `customer_${phone}_${Date.now()}@local.com` // بريد وهمي لتفادي مشكلة تكرار الإيميل الفارغ في قاعدة البيانات
+      email: `customer_${phone}_${Date.now()}@local.com`, // بريد وهمي لتفادي مشكلة تكرار الإيميل الفارغ في قاعدة البيانات
+      referralCode: newReferralCode,
+      referredBy,
     });
 
     await user.save();
@@ -663,6 +683,40 @@ router.get('/users/:id/loyalty-points', async (req, res) => {
     res.status(200).json({
       success: true,
       data: { loyaltyPoints: user.loyaltyPoints || 0 },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    جلب رمز إحالة المستخدم وعدد الأصدقاء اللي انضموا عن طريقه
+// @route   GET /api/auth/users/:id/referrals
+router.get('/users/:id/referrals', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('referralCode');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    // حسابات مسجّلة قبل إضافة هذه الميزة ماكو عندها رمز إحالة بعد — نولّده
+    // الآن أول مرة يفتح الزبون هذه الصفحة، بدل ما نحتاج سكربت ترحيل بيانات
+    if (!user.referralCode) {
+      for (let i = 0; i < 5; i++) {
+        const candidate = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const codeTaken = await User.findOne({ referralCode: candidate });
+        if (!codeTaken) {
+          user.referralCode = candidate;
+          await user.save();
+          break;
+        }
+      }
+    }
+
+    const referredCount = await User.countDocuments({ referredBy: user._id });
+
+    res.status(200).json({
+      success: true,
+      data: { referralCode: user.referralCode || null, referredCount },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

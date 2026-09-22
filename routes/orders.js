@@ -758,6 +758,18 @@ router.put('/:id/status', async (req, res) => {
         });
       }
       order.pointsAwarded = true;
+
+      // مكافأة الإحالة: أول طلب مكتمل لزبون مُحال يمنح ٥٠ نقطة للطرفين
+      // (الداعي والمدعو)، مرة وحدة بس لكل حساب مُحال
+      const referredCustomer = await User.findById(order.customer).select('referredBy referralRewardGiven');
+      if (referredCustomer && referredCustomer.referredBy && !referredCustomer.referralRewardGiven) {
+        const REFERRAL_BONUS_POINTS = 50;
+        await User.findByIdAndUpdate(referredCustomer.referredBy, { $inc: { loyaltyPoints: REFERRAL_BONUS_POINTS } });
+        await User.findByIdAndUpdate(order.customer, {
+          $inc: { loyaltyPoints: REFERRAL_BONUS_POINTS },
+          $set: { referralRewardGiven: true },
+        });
+      }
     }
 
     await order.save();

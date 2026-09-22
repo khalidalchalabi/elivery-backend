@@ -57,6 +57,24 @@ const UserSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // رمز إحالة فريد خاص بكل زبون — يشاركه مع أصدقائه حتى يسجلوا فيه
+    referralCode: {
+      type: String,
+      default: null,
+      unique: true,
+      sparse: true,
+    },
+    // مين دعا هذا الحساب (لو سجّل برمز إحالة شخص ثاني)
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    // يمنع منح مكافأة الإحالة أكثر من مرة لنفس الحساب المُحال
+    referralRewardGiven: {
+      type: Boolean,
+      default: false,
+    },
     // رمز جهاز Firebase Cloud Messaging لإرسال إشعارات Push حقيقية
     fcmToken: {
       type: String,
