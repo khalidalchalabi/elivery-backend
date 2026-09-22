@@ -328,7 +328,7 @@ router.get('/drivers/nearby', async (req, res) => {
           $maxDistance: parseInt(maxDistance), // بالامتار
         },
       },
-    });
+    }).select('-password');
 
     res.status(200).json({
       success: true,
@@ -409,12 +409,13 @@ router.put('/employee/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
     }
 
+    const originalRole = user.role;
+    const originalActive = user.isActive;
+
     if (name) user.name = name;
     if (email) user.email = email;
     if (phone) user.phone = phone;
-    if (role) user.role = role;
     if (typeof isActive !== 'undefined') user.isActive = isActive;
-    if (shopId) user.shop = shopId;
     if (regionId !== undefined) user.region = regionId || null;
 
     const driverAvatar = profilePicture || avatar;
@@ -422,24 +423,6 @@ router.put('/employee/:id', async (req, res) => {
       user.profilePicture = driverAvatar;
     }
 
-    if (user.role === 'driver') {
-      if (!user.driverDetails) user.driverDetails = {};
-      if (address) user.driverDetails.address = address;
-      if (driverAvatar) user.driverDetails.avatar = driverAvatar;
-      // سائق بلا منطقة عمل ما يقدر يقبل أي طلب إطلاقاً — نسد الفجوة تلقائياً
-      if (!user.region) user.region = await getDefaultRegionId();
-    }
-
-    await user.save();
-    res.status(200).json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح', data: user });
-
-    const originalRole = user.role;
-    const originalActive = user.isActive;
-
-    if (name) user.name = name;
-    if (email) user.email = email;
-    if (phone) user.phone = phone;
-    
     if (role) {
       const allowedRoles = ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'];
       if (!allowedRoles.includes(role)) {
@@ -459,18 +442,23 @@ router.put('/employee/:id', async (req, res) => {
           currentLocation: { type: 'Point', coordinates: [0, 0] }
         };
       }
+    } else if (shopId) {
+      user.shop = shopId;
     }
-    
-    if (isActive !== undefined) {
-      user.isActive = isActive;
+
+    if (user.role === 'driver') {
+      if (!user.driverDetails) user.driverDetails = {};
+      if (address) user.driverDetails.address = address;
+      if (driverAvatar) user.driverDetails.avatar = driverAvatar;
+      // سائق بلا منطقة عمل ما يقدر يقبل أي طلب إطلاقاً — نسد الفجوة تلقائياً
+      if (!user.region) user.region = await getDefaultRegionId();
     }
 
     await user.save();
-    
+
     let changeDetails = `تم تحديث بيانات الموظف ${user.name}.`;
     if (role && role !== originalRole) changeDetails += ` تغيير الرتبة من ${originalRole} إلى ${role}.`;
     if (isActive !== undefined && isActive !== originalActive) changeDetails += ` تغيير حالة النشاط إلى: ${isActive}.`;
-    
     await logSecurityEvent(user._id, user.name || user.email, user.role, 'update_user_role', changeDetails, req);
 
     res.status(200).json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح', data: user });
