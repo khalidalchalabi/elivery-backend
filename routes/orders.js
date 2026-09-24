@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Shop = require('../models/Shop');
 const { sendPushToUser } = require('../utils/sendPushNotification');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
+const { verifyToken, requireRole } = require('../middleware/auth');
 
 // نصوص إشعارات حالة الطلب بالعربية
 const ORDER_STATUS_NOTIFICATIONS = {
@@ -577,7 +578,7 @@ router.get('/:id/siblings', async (req, res) => {
 
 // @desc    تعيين أو تغيير السائق قسرياً للطلب (خاص بالدعم/المسؤول)
 // @route   PUT /api/orders/:id/assign-driver
-router.put('/:id/assign-driver', async (req, res) => {
+router.put('/:id/assign-driver', verifyToken, requireRole('admin', 'owner', 'support'), async (req, res) => {
   try {
     const { driverId } = req.body;
     const order = await Order.findById(req.params.id);
@@ -623,7 +624,7 @@ router.put('/:id/assign-driver', async (req, res) => {
 
 // @desc    تأكيد الطلب للزبون الجديد (بواسطة الدعم الفني)
 // @route   PUT /api/orders/:id/verify
-router.put('/:id/verify', async (req, res) => {
+router.put('/:id/verify', verifyToken, requireRole('admin', 'owner', 'support'), async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) {
@@ -647,9 +648,11 @@ router.put('/:id/verify', async (req, res) => {
 
 // @desc    قبول الطلب من قبل السائق
 // @route   PUT /api/orders/:id/accept
-router.put('/:id/accept', async (req, res) => {
+router.put('/:id/accept', verifyToken, requireRole('driver'), async (req, res) => {
   try {
-    const { driverId } = req.body;
+    // مصدر معرّف السائق صار التوكن نفسه بدل جسم الطلب — قبلها أي متصل
+    // مصادَق عليه يقدر يمرر driverId أي سائق ثاني ويقبل الطلب نيابة عنه
+    const driverId = req.user.id;
     console.log('Accepting order:', req.params.id, 'by driver:', driverId);
 
     // التحقق من صحة السائق
@@ -713,7 +716,7 @@ router.put('/:id/accept', async (req, res) => {
 
 // @desc    تحديث حالة الطلب (على سبيل المثال: picking_up, delivering, completed)
 // @route   PUT /api/orders/:id/status
-router.put('/:id/status', async (req, res) => {
+router.put('/:id/status', verifyToken, async (req, res) => {
   try {
     const { status } = req.body;
 
@@ -725,6 +728,15 @@ router.put('/:id/status', async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+    }
+
+    // فقط السائق المسند للطلب، أو تاجر محله، أو الدعم/الإدارة يقدرون
+    // يغيّرون حالته — بدون هذا أي سائق يقدر يخلّص طلب سائق ثاني
+    const isStaff = ['admin', 'owner', 'support'].includes(req.user.role);
+    const isAssignedDriver = req.user.role === 'driver' && order.driver && order.driver.toString() === req.user.id;
+    const isOwningMerchant = req.user.role === 'merchant' && order.shop && req.user.shop === order.shop.toString();
+    if (!isStaff && !isAssignedDriver && !isOwningMerchant) {
+      return res.status(403).json({ success: false, message: 'ليس لديك صلاحية تعديل حالة هذا الطلب' });
     }
 
     order.status = status;
@@ -794,19 +806,14 @@ router.put('/:id/status', async (req, res) => {
 
 // @desc    تعديل قيمة منتجات الطلب (إدارة النظام فقط) وإشعار الزبون
 // @route   PUT /api/orders/:id/adjust-price
-router.put('/:id/adjust-price', async (req, res) => {
+// تعديل قيمة الفاتورة صار حصراً لمدير النظام/المالك لمنع تلاعب المحلات بقيمة طلباتها
+router.put('/:id/adjust-price', verifyToken, requireRole('admin', 'owner', 'accountant'), async (req, res) => {
   try {
-    const { itemsPrice, actorId } = req.body;
+    const { itemsPrice } = req.body;
     const newItemsPrice = Number(itemsPrice);
 
     if (!Number.isFinite(newItemsPrice) || newItemsPrice < 0) {
       return res.status(400).json({ success: false, message: 'قيمة الفاتورة غير صالحة' });
-    }
-
-    // تعديل قيمة الفاتورة صار حصراً لمدير النظام/المالك لمنع تلاعب المحلات بقيمة طلباتها
-    const actor = actorId ? await User.findById(actorId).select('role') : null;
-    if (!actor || !['admin', 'owner', 'accountant'].includes(actor.role)) {
-      return res.status(403).json({ success: false, message: 'غير مصرح لك بتعديل قيمة الفاتورة' });
     }
 
     const order = await Order.findById(req.params.id);
@@ -873,7 +880,7 @@ router.get('/nearby/pending', async (req, res) => {
 
 // @desc    تسجيل تقييم الزبون للمحل و/أو السائق لطلب معين
 // @route   POST /api/orders/:id/rate
-router.post('/:id/rate', async (req, res) => {
+router.post('/:id/rate', verifyToken, async (req, res) => {
   try {
     const { shopRating, driverRating, shopComment, driverComment } = req.body;
     const Shop = require('../models/Shop');

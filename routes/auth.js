@@ -6,6 +6,7 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const PromoCode = require('../models/PromoCode');
 const { getDefaultRegionId } = require('../utils/regionHelper');
+const { signToken, verifyToken, requireRole } = require('../middleware/auth');
 
 // يتحقق من كلمة المرور بما يتوافق مع الحسابات القديمة غير المشفّرة (قبل
 // إضافة bcrypt) — لو كانت مشفّرة يقارنها بالطريقة الآمنة، ولو نص صريح
@@ -96,6 +97,7 @@ router.post('/customer/register', async (req, res) => {
       success: true,
       message: 'تم إنشاء الحساب بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -129,6 +131,7 @@ router.post('/customer/login', async (req, res) => {
       success: true,
       message: 'تم تسجيل الدخول بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -160,9 +163,11 @@ router.delete('/customer/:id', async (req, res) => {
   }
 });
 
-// @desc    إنشاء مستخدم جديد (زبون، سائق، مسؤول)
+// @desc    إنشاء مستخدم جديد (زبون، سائق، مسؤول) — مسار قديم غير مستخدم من
+// أي تطبيق حالياً (الإنشاء الفعلي يمر عبر /employee أدناه)، نقفله على
+// admin/owner بس حتى ما يبقى ثغرة تسجيل دخول بلا حساب
 // @route   POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', verifyToken, requireRole('admin', 'owner'), async (req, res) => {
   try {
     const { name, email, password, phone, role, driverDetails, shopId } = req.body;
 
@@ -229,6 +234,7 @@ router.post('/login', async (req, res) => {
       success: true,
       message: 'تم تسجيل الدخول بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -362,7 +368,7 @@ router.get('/drivers/nearby', async (req, res) => {
 
 // @desc    إضافة موظف أو سائق جديد (خاص بالمسؤول)
 // @route   POST /api/auth/employee
-router.post('/employee', async (req, res) => {
+router.post('/employee', verifyToken, requireRole('admin', 'owner'), async (req, res) => {
   try {
     const { name, email, password, phone, role, driverDetails, shopId, address, profilePicture, avatar, regionId } = req.body;
 
@@ -421,7 +427,7 @@ router.post('/employee', async (req, res) => {
 
 // @desc    تعديل بيانات وصلاحيات موظف أو سائق (خاص بالمسؤول)
 // @route   PUT /api/auth/employee/:id
-router.put('/employee/:id', async (req, res) => {
+router.put('/employee/:id', verifyToken, requireRole('admin', 'owner'), async (req, res) => {
   try {
     const { name, email, phone, role, isActive, shopId, address, profilePicture, avatar, regionId } = req.body;
     const user = await User.findById(req.params.id);
@@ -489,7 +495,7 @@ router.put('/employee/:id', async (req, res) => {
 
 // @desc    حذف/إيقاف حساب موظف أو سائق (خاص بالمسؤول)
 // @route   DELETE /api/auth/employee/:id
-router.delete('/employee/:id', async (req, res) => {
+router.delete('/employee/:id', verifyToken, requireRole('admin', 'owner'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user || user.role === 'customer') {
@@ -506,7 +512,7 @@ router.delete('/employee/:id', async (req, res) => {
 
 // @desc    جلب قائمة بكافة الموظفين والسائقين (خاص بالمسؤول)
 // @route   GET /api/auth/employees
-router.get('/employees', async (req, res) => {
+router.get('/employees', verifyToken, requireRole('admin', 'owner'), async (req, res) => {
   try {
     const employees = await User.find({ role: { $in: ['driver', 'admin', 'owner', 'accountant', 'merchant', 'support'] } }).select('-password').populate('shop', 'name').populate('region', 'name').sort({ createdAt: -1 });
     res.status(200).json({ success: true, count: employees.length, data: employees });
@@ -536,6 +542,7 @@ router.post('/google', async (req, res) => {
         success: true,
         message: 'تم تسجيل الدخول عبر Google بنجاح',
         data: user,
+        token: signToken(user),
       });
     }
 
@@ -554,6 +561,7 @@ router.post('/google', async (req, res) => {
       success: true,
       message: 'تم إنشاء حساب زبون جديد عبر Google بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -581,6 +589,7 @@ router.post('/apple', async (req, res) => {
         success: true,
         message: 'تم تسجيل الدخول عبر Apple ID بنجاح',
         data: user,
+        token: signToken(user),
       });
     }
 
@@ -599,6 +608,7 @@ router.post('/apple', async (req, res) => {
       success: true,
       message: 'تم إنشاء حساب زبون جديد عبر Apple ID بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
