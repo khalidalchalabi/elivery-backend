@@ -1,8 +1,34 @@
 const { randomUUID } = require('crypto');
+const Jimp = require('jimp');
 const { getStorage } = require('firebase-admin/storage');
 const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 
 const DATA_URI_RE = /^data:image\/(\w+);base64,(.+)$/;
+
+// يضغط الصورة قبل الرفع (تصغير الأبعاد + ضغط الجودة) — صور كاميرا الهاتف
+// توصل أحياناً بأبعاد 3000-4000 بكسل وحجم عدة ميجابايت، وهذا يستهلك مساحة
+// تخزين ونقل بيانات (bandwidth) حقيقي على Firebase Storage بلا داعي، خصوصاً
+// إنها تترفع من كل زبون يفتح التطبيق ويشوف صور المحلات/المنتجات. لو فشل
+// الضغط لأي سبب (صيغة غير مدعومة مثلاً)، نرفع الصورة الأصلية بدون تعديل
+// بدل ما نوقف عملية الإضافة/التعديل كاملة
+async function compressImageBuffer(buffer, maxDimension = 1000, quality = 75) {
+  try {
+    const image = await Jimp.read(buffer);
+    if (image.bitmap.width > maxDimension || image.bitmap.height > maxDimension) {
+      if (image.bitmap.width >= image.bitmap.height) {
+        image.resize(maxDimension, Jimp.AUTO);
+      } else {
+        image.resize(Jimp.AUTO, maxDimension);
+      }
+    }
+    image.quality(quality);
+    const outBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+    return { buffer: outBuffer, contentType: 'image/jpeg', ext: 'jpg' };
+  } catch (error) {
+    console.error('فشل ضغط الصورة، سترفع كما هي:', error.message);
+    return null;
+  }
+}
 
 // يرفع صورة base64 إلى Firebase Storage ويرجّع رابط عام دائم بدلها.
 // إذا كان النص أصلاً رابط (http) أو إيموجي (مو صورة base64)، يرجّعه كما هو.
@@ -18,15 +44,24 @@ async function saveBase64Image(base64Str, folder = 'misc') {
   try {
     if (!initFirebaseAdmin()) return base64Str;
 
-    const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
-    const buffer = Buffer.from(match[2], 'base64');
+    let ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    let buffer = Buffer.from(match[2], 'base64');
+    let contentType = `image/${match[1]}`;
+
+    const compressed = await compressImageBuffer(buffer);
+    if (compressed) {
+      buffer = compressed.buffer;
+      contentType = compressed.contentType;
+      ext = compressed.ext;
+    }
+
     const bucket = getStorage().bucket();
     const filename = `${folder}/${Date.now()}-${randomUUID()}.${ext}`;
     const file = bucket.file(filename);
 
     await file.save(buffer, {
       metadata: {
-        contentType: `image/${match[1]}`,
+        contentType,
         cacheControl: 'public, max-age=31536000, immutable',
       },
     });
