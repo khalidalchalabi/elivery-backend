@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Shop = require('../models/Shop');
 const { sendPushToUser } = require('../utils/sendPushNotification');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
+const { getEffectiveIsOpen } = require('../utils/shopSchedule');
 
 // نصوص إشعارات حالة الطلب بالعربية
 const ORDER_STATUS_NOTIFICATIONS = {
@@ -264,8 +265,9 @@ router.post('/', async (req, res) => {
     // ممكن يتم تجاوزه (سلة قديمة، حالة محل تغيّرت بعد فتح الشاشة، إلخ)
     let resolvedOrderRegion = null;
     if (finalShopId) {
-      const shop = await Shop.findById(finalShopId).select('isOpen region');
-      if (shop && shop.isOpen === false) {
+      const shop = await Shop.findById(finalShopId).select('isOpen region schedule overrideIsOpen overrideUntil');
+      // الحالة الفعلية تشمل ساعات الدوام واستراحة الظهر، مو الزر اليدوي بس
+      if (shop && !getEffectiveIsOpen(shop)) {
         return res.status(400).json({ success: false, message: 'هذا المحل مغلق حالياً ولا يستقبل طلبات جديدة' });
       }
       resolvedOrderRegion = shop?.region || null;

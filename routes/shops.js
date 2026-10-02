@@ -8,6 +8,7 @@ const path = require('path');
 const { sendPushToUser } = require('../utils/sendPushNotification');
 const { saveBase64Image } = require('../utils/imageUpload');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
+const { applyScheduleChanges, serializeShop } = require('../utils/shopSchedule');
 
 // @desc    جلب كافة المحلات من قاعدة البيانات
 // @route   GET /api/shops
@@ -31,7 +32,8 @@ router.get('/', async (req, res) => {
     const shops = await query;
     // 30 ثانية: بيانات المحل (الحالة مفتوح/مغلق، السعر...) تتغير بين فترة وثانية
     res.set('Cache-Control', 'public, max-age=30');
-    res.status(200).json({ success: true, count: shops.length, data: shops });
+    // isOpen هنا الحالة الفعلية (مع ساعات الدوام والاستراحة) مو الزر اليدوي بس
+    res.status(200).json({ success: true, count: shops.length, data: shops.map((s) => serializeShop(s)) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -102,7 +104,7 @@ router.post('/', async (req, res) => {
     });
 
     await shop.save();
-    res.status(201).json({ success: true, message: 'تم إضافة المحل بنجاح', data: shop });
+    res.status(201).json({ success: true, message: 'تم إضافة المحل بنجاح', data: serializeShop(shop) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -133,13 +135,19 @@ router.delete('/:id', async (req, res) => {
 // @route   PUT /api/shops/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, imagePath, deliveryTime, categories, latitude, longitude, isOpen, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent, zonePricing } = req.body;
+    const { name, description, imagePath, deliveryTime, categories, latitude, longitude, isOpen, schedule, discountPercentage, minOrderAmountForDiscount, regionId, appCommissionPercent, zonePricing } = req.body;
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ success: false, message: 'المحل غير موجود' });
     }
 
     const previousDiscount = shop.discountPercentage || 0;
+
+    // ساعات الدوام + الزر اليدوي (يتحقق من الأوقات ويحدد سلوك الإغلاق اليدوي بوضع الجدولة)
+    const scheduleResult = applyScheduleChanges(shop, { schedule, isOpen });
+    if (scheduleResult.error) {
+      return res.status(400).json({ success: false, message: scheduleResult.error });
+    }
 
     if (name) shop.name = name;
     if (description !== undefined) shop.description = description;
@@ -153,7 +161,6 @@ router.put('/:id', async (req, res) => {
         .filter((zp) => Number.isFinite(zp.deliveryFee) && zp.deliveryFee >= 0);
     }
     if (categories) shop.categories = categories;
-    if (isOpen !== undefined) shop.isOpen = isOpen;
     if (discountPercentage !== undefined) shop.discountPercentage = parseFloat(discountPercentage);
     if (minOrderAmountForDiscount !== undefined) shop.minOrderAmountForDiscount = parseFloat(minOrderAmountForDiscount);
     if (appCommissionPercent !== undefined) shop.appCommissionPercent = parseFloat(appCommissionPercent);
@@ -168,7 +175,7 @@ router.put('/:id', async (req, res) => {
 
     await shop.save();
     await shop.populate('zonePricing.zone', 'name');
-    res.status(200).json({ success: true, message: 'تم تحديث بيانات المحل بنجاح', data: shop });
+    res.status(200).json({ success: true, message: 'تم تحديث بيانات المحل بنجاح', data: serializeShop(shop) });
 
     // إشعار من فضّل هذا المحل عند زيادة نسبة الخصم
     if (shop.discountPercentage > previousDiscount) {

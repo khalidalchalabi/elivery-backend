@@ -70,6 +70,27 @@ const ShopSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // ساعات الدوام التلقائية — الأوقات 'HH:mm' بتوقيت بغداد (انظر utils/shopSchedule.js).
+    // معطّلة افتراضياً: المحلات الحالية تبقى على الزر اليدوي isOpen كما هي
+    schedule: {
+      enabled: { type: Boolean, default: false },
+      openTime: { type: String, default: '09:00' },
+      closeTime: { type: String, default: '23:00' },
+      // استراحة الظهر (أو أي استراحة): المحل يتسكّر خلالها ويرجع يفتح تلقائياً بنهايتها
+      breakEnabled: { type: Boolean, default: false },
+      breakStart: { type: String, default: '14:00' },
+      breakEnd: { type: String, default: '16:00' },
+    },
+    // تجاوز يدوي مؤقت لحكم الجدول (إغلاق أو فتح استثنائي بالزر اليدوي): المحل يتبع
+    // overrideIsOpen لحد overrideUntil (أقرب تغيير قادم بالجدول) ثم يرجع يتبع الجدول
+    overrideIsOpen: {
+      type: Boolean,
+      default: null,
+    },
+    overrideUntil: {
+      type: Date,
+      default: null,
+    },
     discountPercentage: {
       type: Number,
       default: 0,
