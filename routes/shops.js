@@ -9,6 +9,7 @@ const { sendPushToUser } = require('../utils/sendPushNotification');
 const { saveBase64Image } = require('../utils/imageUpload');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
 const { applyScheduleChanges, serializeShop } = require('../utils/shopSchedule');
+const { flexibleArabicPattern } = require('../utils/searchPattern');
 
 // @desc    جلب كافة المحلات من قاعدة البيانات
 // @route   GET /api/shops
@@ -53,6 +54,39 @@ router.get('/images', async (req, res) => {
     // 5 دقائق: الصور نفسها تتغير نادراً جداً مقارنة ببيانات المحل
     res.set('Cache-Control', 'public, max-age=300');
     res.status(200).json({ success: true, data: map });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// @desc    بحث عن منتجات بكل المحلات (لبحث الشاشة الرئيسية بتطبيق الزبون)
+// @route   GET /api/shops/products/search?q=عنب&limit=20
+router.get('/products/search', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 60);
+    // أقل من حرفين = نتائج عشوائية كثيرة بلا فايدة
+    if (q.length < 2) {
+      return res.status(200).json({ success: true, count: 0, data: [] });
+    }
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 30);
+    const rx = new RegExp(flexibleArabicPattern(q), 'i');
+    const found = await Product.find({
+      isAvailable: { $ne: false },
+      $or: [{ name: rx }, { description: rx }],
+    })
+      .select('shop name description price originalPrice discountPercentage category imagePath rating isAvailable')
+      .limit(limit * 3)
+      .lean();
+
+    // تطابق الاسم يتقدم على الوصف، والأقرب لبداية الاسم أولاً
+    const score = (p) => {
+      const m = p.name ? p.name.search(rx) : -1;
+      return m >= 0 ? m : 1000;
+    };
+    found.sort((a, b) => score(a) - score(b));
+
+    res.set('Cache-Control', 'public, max-age=30');
+    res.status(200).json({ success: true, count: Math.min(found.length, limit), data: found.slice(0, limit) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
