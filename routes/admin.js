@@ -10,6 +10,7 @@ const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const AuditLog = require('../models/AuditLog');
+const AdminStats = require('../utils/adminStats');
 const { sendPushToUser, sendPushToTopic } = require('../utils/sendPushNotification');
 const { saveBase64Image } = require('../utils/imageUpload');
 const { initFirebaseAdmin } = require('../config/firebaseAdmin');
@@ -235,43 +236,18 @@ router.post('/configure-storage-cors', async (req, res) => {
 // @route   GET /api/admin/stats
 router.get('/stats', async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const totalCustomers = await User.countDocuments({ role: 'customer' });
-    const totalDrivers = await User.countDocuments({ role: 'driver' });
-    const totalSupport = await User.countDocuments({ role: 'support' });
-    
-    // ربح المنصة الفعلي = عمولة التوصيل (20% من أجور التوصيل لكل الطلبات) +
-    // عمولة اختيارية من قيمة مواد كل محل (حسب appCommissionPercent الخاص فيه،
-    // افتراضياً صفر لو المحل ما فعّلها). لاحظ: كان هذا الحساب يعتمد خطأً على
-    // حقل order.totalPaid غير الموجود أصلاً بالنموذج، فكانت النتيجة صفر دايماً
-    const orders = await Order.find({ status: 'completed' });
-    const Shop = require('../models/Shop');
-    const shops = await Shop.find().select('appCommissionPercent').lean();
-    const shopCommissionMap = {};
-    shops.forEach(s => { shopCommissionMap[s._id.toString()] = s.appCommissionPercent || 0; });
-
-    let totalRevenue = 0;
-    orders.forEach(order => {
-      const deliveryFee = order.priceDetails?.deliveryFee || 0;
-      totalRevenue += deliveryFee * 0.2;
-
-      const itemsPrice = order.priceDetails?.itemsPrice || 0;
-      const shopId = order.shop ? order.shop.toString() : null;
-      const commissionPercent = shopId ? (shopCommissionMap[shopId] || 0) : 0;
-      totalRevenue += itemsPrice * (commissionPercent / 100);
-    });
-    totalRevenue = Math.round(totalRevenue);
+    // استعلامات تجميع قليلة بالتوازي بدل 6 استعلامات متتالية وتحميل كل الطلبات للذاكرة
+    // (انظر utils/adminStats.js). الحساب: ربح المنصة = 20% من أجور التوصيل + عمولة اختيارية
+    // من مواد كل محل حسب appCommissionPercent (افتراضياً صفر)
+    const [roleRows, shopRows, shops] = await Promise.all([
+      User.aggregate(AdminStats.usersByRolePipeline),
+      Order.aggregate(AdminStats.completedByShopPipeline),
+      Shop.find().select('appCommissionPercent').lean(),
+    ]);
 
     res.status(200).json({
       success: true,
-      data: {
-        totalUsers,
-        totalCustomers,
-        totalDrivers,
-        totalSupport,
-        totalOrders: orders.length,
-        totalRevenue
-      }
+      data: AdminStats.buildAdminStats({ roleRows, shopRows, shops }),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -549,57 +525,21 @@ router.get('/financials/shops', async (req, res) => {
   try {
     const Shop = require('../models/Shop');
     const Payout = require('../models/Payout');
-    const shops = await Shop.find().lean();
 
-    // مصدر الحقيقة الوحيد لمستحقات المحل: كل الطلبات المكتملة تاريخياً ناقص
-    // الدفعات المؤكدة فقط من التاجر (نفس الحساب المستخدم بصفحة التاجر نفسه
-    // عبر /shops/:shopId/financials) — بدل الاعتماد على علم isSettledShop
-    // القديم اللي كان يصفّر الحساب من طرف الإدارة وحدها بدون أي تأكيد فعلي
-    // من التاجر إنه استلم المبلغ
-    const orders = await Order.find({ status: 'completed' }).lean();
-    const payouts = await Payout.find({ status: 'confirmed', shop: { $ne: null } }).lean();
+    // مصدر الحقيقة الوحيد لمستحقات المحل: كل الطلبات المكتملة تاريخياً ناقص الدفعات
+    // المؤكدة فقط من التاجر (نفس حساب صفحة التاجر عبر /shops/:shopId/financials) — بدل
+    // علم isSettledShop القديم اللي كان يصفّر الحساب من طرف الإدارة بدون تأكيد من التاجر.
+    // التجميع بالقاعدة وبالتوازي، ونجلب اسم المحل ونسبته فقط (كان يحمّل المحلات كاملة بصورها)
+    const [shops, salesRows, payoutRows] = await Promise.all([
+      Shop.find().select('name appCommissionPercent').lean(),
+      Order.aggregate(AdminStats.shopSalesPipeline),
+      Payout.aggregate(AdminStats.shopPayoutsPipeline),
+    ]);
 
-    const shopStats = {};
-    shops.forEach(s => {
-      shopStats[s._id.toString()] = {
-        _id: s._id,
-        name: s.name,
-        totalSales: 0,
-        totalOrders: 0,
-        commissionPercent: s.appCommissionPercent || 0,
-        commission: 0,
-        totalPaid: 0,
-        unpaidBalance: 0,
-      };
+    res.status(200).json({
+      success: true,
+      data: AdminStats.buildShopFinancials({ shops, salesRows, payoutRows }),
     });
-
-    orders.forEach(order => {
-      if (order.shop) {
-        const shopId = order.shop.toString();
-        if (shopStats[shopId]) {
-          const itemsPrice = order.priceDetails?.itemsPrice || 0;
-          shopStats[shopId].totalSales += itemsPrice;
-          shopStats[shopId].totalOrders += 1;
-        }
-      }
-    });
-
-    payouts.forEach(p => {
-      const shopId = p.shop ? p.shop.toString() : null;
-      if (shopId && shopStats[shopId]) {
-        shopStats[shopId].totalPaid += p.amount || 0;
-      }
-    });
-
-    // عمولة التطبيق من المحل اختيارية (appCommissionPercent) — افتراضياً صفر،
-    // أي المحل يستحق كامل قيمة مبيعاته إلا لو الإدارة فعّلت نسبة له تحديداً
-    Object.keys(shopStats).forEach(id => {
-      const s = shopStats[id];
-      s.commission = Math.round(s.totalSales * (s.commissionPercent / 100));
-      s.unpaidBalance = Math.round(s.totalSales - s.commission - s.totalPaid);
-    });
-
-    res.status(200).json({ success: true, data: Object.values(shopStats) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -609,48 +549,13 @@ router.get('/financials/shops', async (req, res) => {
 // @route   GET /api/admin/financials/drivers
 router.get('/financials/drivers', async (req, res) => {
   try {
-    const drivers = await User.find({ role: 'driver' }).lean();
-    const orders = await Order.find({ status: 'completed', isSettledDriver: { $ne: true } }).lean();
+    // نجلب اسم السائق ورقمه فقط (كان يحمّل المستخدم كاملاً بما فيه الصورة والرمز)
+    const [drivers, rows] = await Promise.all([
+      User.find({ role: 'driver' }).select('name phone').lean(),
+      Order.aggregate(AdminStats.driverOrdersPipeline),
+    ]);
 
-    const driverStats = {};
-    drivers.forEach(d => {
-      driverStats[d._id.toString()] = {
-        _id: d._id,
-        name: d.name,
-        phone: d.phone,
-        totalOrders: 0,
-        totalDeliveryFees: 0,
-        driverEarnings: 0,
-        cashCollected: 0,
-        netBalance: 0,
-      };
-    });
-
-    orders.forEach(order => {
-      if (order.driver) {
-        const driverId = order.driver.toString();
-        if (driverStats[driverId]) {
-          const deliveryFee = order.priceDetails?.deliveryFee || 0;
-          const totalPrice = order.priceDetails?.totalPrice || 0;
-          const earnings = deliveryFee * 0.8;
-          
-          driverStats[driverId].totalOrders += 1;
-          driverStats[driverId].totalDeliveryFees += deliveryFee;
-          driverStats[driverId].driverEarnings += earnings;
-          
-          if (order.paymentMethod === 'cash') {
-            driverStats[driverId].cashCollected += totalPrice;
-            // الإدارة تطلب من السائق المبلغ الكلي للطلب مطروحاً منه مستحقات التوصيل الخاصة به (80% من أجر التوصيل)
-            driverStats[driverId].netBalance -= (totalPrice - earnings);
-          } else {
-            // الدفع عبر الكارت أو المحفظة: السائق يطلب من الإدارة مستحقاته
-            driverStats[driverId].netBalance += earnings;
-          }
-        }
-      }
-    });
-
-    res.status(200).json({ success: true, data: Object.values(driverStats) });
+    res.status(200).json({ success: true, data: AdminStats.buildDriverFinancials({ drivers, rows }) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

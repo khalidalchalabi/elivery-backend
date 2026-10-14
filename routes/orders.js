@@ -7,6 +7,7 @@ const Shop = require('../models/Shop');
 const { sendPushToUser } = require('../utils/sendPushNotification');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
 const { getEffectiveIsOpen } = require('../utils/shopSchedule');
+const AdminStats = require('../utils/adminStats');
 
 // نصوص إشعارات حالة الطلب بالعربية
 const ORDER_STATUS_NOTIFICATIONS = {
@@ -386,107 +387,29 @@ router.post('/', async (req, res) => {
 // @route   GET /api/orders/dashboard/stats
 router.get('/dashboard/stats', async (req, res) => {
   try {
-    const totalOrdersCount = await Order.countDocuments();
-    const pendingCount = await Order.countDocuments({ status: 'pending' });
-    const activeCount = await Order.countDocuments({ status: { $in: ['accepted', 'picking_up', 'delivering'] } });
-    const completedCount = await Order.countDocuments({ status: 'completed' });
-    const cancelledCount = await Order.countDocuments({ status: 'cancelled' });
+    // كان ~10 استعلامات متتالية (كل واحد ~1 ثانية رحلة شبكة) مع تحميل كل الطلبات المكتملة
+    // للذاكرة. الآن 5 استعلامات تجميع بالتوازي، والحساب النهائي بدوال نقية (utils/adminStats.js)
+    const { keys, windowStart, startOfToday } = AdminStats.dashboardWindow(new Date());
+    const P = AdminStats.dashboardPipelines({ windowStart, startOfToday });
 
-    // توزيع دقيق لكل حالة طلب على حدة (لعرض تفاصيل أكثر بلوحات المعلومات)
-    const statusList = [
-      'awaiting_verification', 'pending', 'preparing', 'ready',
-      'accepted', 'picking_up', 'delivering', 'completed', 'cancelled',
-    ];
-    const statusCounts = await Order.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } },
+    const [statusRows, totalsRows, dailyRows, todayRows, driversRows] = await Promise.all([
+      Order.aggregate(P.byStatus),
+      Order.aggregate(P.completedTotals),
+      Order.aggregate(P.dailySales),
+      Order.aggregate(P.today),
+      User.aggregate(AdminStats.driversCountPipeline),
     ]);
-    const statusBreakdown = {};
-    statusList.forEach((s) => { statusBreakdown[s] = 0; });
-    statusCounts.forEach((row) => {
-      if (row._id in statusBreakdown) statusBreakdown[row._id] = row.count;
-    });
-
-    const completedOrders = await Order.find({ status: 'completed' });
-
-    let totalRevenue = 0;
-    let totalItemsPrice = 0;
-    let totalDeliveryFees = 0;
-
-    completedOrders.forEach(order => {
-      totalRevenue += order.priceDetails?.totalPrice || 0;
-      totalItemsPrice += order.priceDetails?.itemsPrice || 0;
-      totalDeliveryFees += order.priceDetails?.deliveryFee || 0;
-    });
-
-    const driverEarnings = totalDeliveryFees * 0.8;
-    const appCommission = totalDeliveryFees * 0.2;
-
-    // مبيعات آخر 14 يوم مجمعة يومياً للرسم البياني
-    const dailySalesMap = {};
-    const today = new Date();
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      dailySalesMap[key] = { date: key, revenue: 0, orderCount: 0 };
-    }
-    completedOrders.forEach(order => {
-      const key = order.createdAt.toISOString().slice(0, 10);
-      if (dailySalesMap[key]) {
-        dailySalesMap[key].revenue += order.priceDetails?.totalPrice || 0;
-        dailySalesMap[key].orderCount += 1;
-      }
-    });
-
-    // إحصائيات اليوم الحالي فقط (كل الطلبات المنشأة اليوم، بغض النظر عن حالتها)
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const todayOrders = await Order.find({ createdAt: { $gte: startOfToday } });
-    const todayOrdersCount = todayOrders.length;
-    const todayCompletedCount = todayOrders.filter((o) => o.status === 'completed').length;
-    const todayCancelledCount = todayOrders.filter((o) => o.status === 'cancelled').length;
-    const todayRevenue = todayOrders
-      .filter((o) => o.status === 'completed')
-      .reduce((sum, o) => sum + (o.priceDetails?.totalPrice || 0), 0);
-
-    // عدد السائقين المتصلين/المتاحين حالياً لاستلام طلبات
-    const onlineDriversCount = await User.countDocuments({
-      role: 'driver',
-      isActive: true,
-      'driverDetails.isAvailable': true,
-    });
-    const totalDriversCount = await User.countDocuments({ role: 'driver' });
 
     res.status(200).json({
       success: true,
-      data: {
-        counts: {
-          total: totalOrdersCount,
-          pending: pendingCount,
-          active: activeCount,
-          completed: completedCount,
-          cancelled: cancelledCount,
-        },
-        statusBreakdown,
-        today: {
-          ordersCount: todayOrdersCount,
-          completedCount: todayCompletedCount,
-          cancelledCount: todayCancelledCount,
-          revenue: todayRevenue,
-        },
-        drivers: {
-          online: onlineDriversCount,
-          total: totalDriversCount,
-        },
-        financials: {
-          totalRevenue,
-          totalItemsPrice,
-          totalDeliveryFees,
-          driverEarnings,
-          appCommission,
-        },
-        dailySales: Object.values(dailySalesMap),
-      }
+      data: AdminStats.buildDashboardStats({
+        statusRows,
+        totalsRow: totalsRows[0],
+        dailyRows,
+        todayRows,
+        driversRow: driversRows[0],
+        keys,
+      }),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
