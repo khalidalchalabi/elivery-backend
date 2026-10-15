@@ -37,6 +37,14 @@ const ProductSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // وقت توفر المنتج خلال اليوم (مثلاً وجبة فطور من 07:00 إلى 11:00). بتوقيت بغداد،
+    // ويدعم المدى الليلي (18:00 → 02:00). خارج الوقت يصير المنتج غير متاح تلقائياً
+    // بدون ما التاجر يغيّر شي، والزر اليدوي isAvailable يبقى يمنعه بأي وقت
+    availability: {
+      enabled: { type: Boolean, default: false },
+      from: { type: String, default: '08:00' },
+      to: { type: String, default: '23:00' },
+    },
     originalPrice: {
       type: Number,
       default: 0,

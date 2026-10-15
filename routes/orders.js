@@ -8,6 +8,7 @@ const { sendPushToUser } = require('../utils/sendPushNotification');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
 const { getEffectiveIsOpen } = require('../utils/shopSchedule');
 const AdminStats = require('../utils/adminStats');
+const { isAvailableNow } = require('../utils/productAvailability');
 
 // نصوص إشعارات حالة الطلب بالعربية
 const ORDER_STATUS_NOTIFICATIONS = {
@@ -252,7 +253,17 @@ router.post('/', async (req, res) => {
         items.filter((it) => it.product && mongoose.Types.ObjectId.isValid(it.product)).map((it) => it.product)
       )];
       if (productIds.length > 0) {
-        const products = await Product.find({ _id: { $in: productIds } }).select('description');
+        const products = await Product.find({ _id: { $in: productIds } }).select('name description isAvailable availability');
+        // منتج غير متاح الآن (أوقفه التاجر، أو خارج نافذة وقت توفره مثل وجبة فطور بعد 11)
+        // لا يُقبل بالطلب. الواجهة تمنعه لكن السلة ممكن تكون قديمة أو تغيّر الوقت بعد فتحها
+        const now = new Date();
+        const unavailable = products.filter((p) => !isAvailableNow(p, now)).map((p) => p.name);
+        if (unavailable.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `المنتج غير متوفر حالياً: ${unavailable.join('، ')}. الرجاء إزالته من السلة`,
+          });
+        }
         const descByProductId = {};
         products.forEach((p) => { descByProductId[p._id.toString()] = p.description || null; });
         items = items.map((it) => ({

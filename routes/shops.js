@@ -10,6 +10,7 @@ const { saveBase64Image } = require('../utils/imageUpload');
 const { findNearestRegion, getDefaultRegionId } = require('../utils/regionHelper');
 const { applyScheduleChanges, serializeShop } = require('../utils/shopSchedule');
 const { flexibleArabicPattern } = require('../utils/searchPattern');
+const { isWithinWindow, mergeAvailability, serializeProduct } = require('../utils/productAvailability');
 
 // @desc    جلب كافة المحلات من قاعدة البيانات
 // @route   GET /api/shops
@@ -70,13 +71,16 @@ router.get('/products/search', async (req, res) => {
     }
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 30);
     const rx = new RegExp(flexibleArabicPattern(q), 'i');
-    const found = await Product.find({
+    const foundAll = await Product.find({
       isAvailable: { $ne: false },
       $or: [{ name: rx }, { description: rx }],
     })
-      .select('shop name description price originalPrice discountPercentage category imagePath rating isAvailable')
+      .select('shop name description price originalPrice discountPercentage category imagePath rating isAvailable availability')
       .limit(limit * 3)
       .lean();
+    // خارج نافذة وقت التوفر ما يظهر المنتج بالبحث (مثلاً فطور بعد الساعة 11)
+    const now = new Date();
+    const found = foundAll.filter((p) => isWithinWindow(p.availability, now)).map((p) => serializeProduct(p, now));
 
     // تطابق الاسم يتقدم على الوصف، والأقرب لبداية الاسم أولاً
     const score = (p) => {
@@ -239,8 +243,9 @@ router.get('/:shopId/products', async (req, res) => {
       query = query.select('-imagePath');
     }
     const products = await query;
+    const now = new Date();
     res.set('Cache-Control', 'public, max-age=30');
-    res.status(200).json({ success: true, count: products.length, data: products });
+    res.status(200).json({ success: true, count: products.length, data: products.map((p) => serializeProduct(p, now)) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -291,7 +296,12 @@ function normalizeDiscount(price, origP, discP) {
 // @route   POST /api/shops/:shopId/products
 router.post('/:shopId/products', async (req, res) => {
   try {
-    const { name, description, price, originalPrice, discountPercentage, category, imagePath, rating } = req.body;
+    const { name, description, price, originalPrice, discountPercentage, category, imagePath, rating, availability } = req.body;
+
+    const availabilityResult = mergeAvailability(availability, null);
+    if (availabilityResult.error) {
+      return res.status(400).json({ success: false, message: availabilityResult.error });
+    }
 
     const shop = await Shop.findById(req.params.shopId);
     if (!shop) {
@@ -312,6 +322,7 @@ router.post('/:shopId/products', async (req, res) => {
       category,
       imagePath: resolvedImagePath,
       rating,
+      ...(availabilityResult.value ? { availability: availabilityResult.value } : {}),
     });
 
     await product.save();
@@ -322,7 +333,7 @@ router.post('/:shopId/products', async (req, res) => {
       await shop.save();
     }
 
-    res.status(201).json({ success: true, message: 'تم إضافة المنتج بنجاح', data: product });
+    res.status(201).json({ success: true, message: 'تم إضافة المنتج بنجاح', data: serializeProduct(product) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -348,7 +359,7 @@ router.delete('/products/:id', async (req, res) => {
 // @route   PUT /api/shops/products/:id
 router.put('/products/:id', async (req, res) => {
   try {
-    const { name, description, price, originalPrice, discountPercentage, category, imagePath, isAvailable } = req.body;
+    const { name, description, price, originalPrice, discountPercentage, category, imagePath, isAvailable, availability } = req.body;
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'المنتج غير موجود' });
@@ -366,6 +377,13 @@ router.put('/products/:id', async (req, res) => {
     product.discountPercentage = discP;
 
     if (isAvailable !== undefined) product.isAvailable = isAvailable;
+    if (availability !== undefined) {
+      const availabilityResult = mergeAvailability(availability, product.availability);
+      if (availabilityResult.error) {
+        return res.status(400).json({ success: false, message: availabilityResult.error });
+      }
+      if (availabilityResult.value) product.availability = availabilityResult.value;
+    }
     if (category) {
       product.category = category;
       const shop = await Shop.findById(product.shop);
@@ -377,7 +395,7 @@ router.put('/products/:id', async (req, res) => {
     if (imagePath) product.imagePath = await saveBase64Image(imagePath, 'products');
 
     await product.save();
-    res.status(200).json({ success: true, message: 'تم تحديث بيانات المنتج بنجاح', data: product });
+    res.status(200).json({ success: true, message: 'تم تحديث بيانات المنتج بنجاح', data: serializeProduct(product) });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
