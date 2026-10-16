@@ -3,6 +3,23 @@ const router = express.Router();
 const Complaint = require('../models/Complaint');
 const Order = require('../models/Order');
 const User = require('../models/User');
+const { sendPushToUser } = require('../utils/sendPushNotification');
+
+const CATEGORY_LABELS = {
+  late_delivery: 'تأخر التوصيل',
+  wrong_item: 'مادة خاطئة',
+  damaged_item: 'مادة تالفة',
+  missing_item: 'مادة ناقصة',
+  rude_behavior: 'سوء تعامل',
+  quality_issue: 'مشكلة بالجودة',
+  other: 'أخرى',
+};
+
+const STATUS_NOTIFICATIONS = {
+  in_review: { title: 'شكواك قيد المراجعة 🔎', body: 'فريق الدعم بدأ مراجعة شكواك.' },
+  resolved: { title: 'تم حل شكواك ✅', body: 'تم حل شكواك، افتح "شكاواي" لمعرفة التفاصيل.' },
+  rejected: { title: 'تحديث على شكواك', body: 'تمت مراجعة شكواك، افتح "شكاواي" لمعرفة التفاصيل.' },
+};
 
 // @desc    جلب كل الشكاوى (مع فلترة اختيارية بالحالة أو السائق أو الزبون)
 // @route   GET /api/complaints
@@ -54,6 +71,18 @@ router.post('/', async (req, res) => {
     });
 
     res.status(201).json({ success: true, message: 'تم تسجيل الشكوى بنجاح', data: complaint });
+
+    // إشعار فوري لكادر الدعم والإدارة بوصول شكوى جديدة (لا يؤخر الاستجابة، ويفشل بصمت)
+    const shortId = complaint._id.toString().slice(-6).toUpperCase();
+    User.find({ role: { $in: ['support', 'admin', 'owner'] }, isActive: { $ne: false } })
+      .then((staff) => staff.forEach((member) =>
+        sendPushToUser(member, {
+          title: 'شكوى جديدة ⚠️',
+          body: `شكوى #${shortId} — ${CATEGORY_LABELS[category] || category}`,
+          data: { type: 'new_complaint', complaintId: complaint._id.toString(), orderId: String(orderId) },
+        })
+      ))
+      .catch((err) => console.error('فشل إشعار الكادر بالشكوى الجديدة:', err.message));
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -69,6 +98,7 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'الشكوى غير موجودة' });
     }
 
+    const previousStatus = complaint.status;
     if (status) complaint.status = status;
     if (resolutionNote !== undefined) complaint.resolutionNote = resolutionNote.trim();
     if (handledById) complaint.handledBy = handledById;
@@ -78,6 +108,16 @@ router.put('/:id', async (req, res) => {
 
     await complaint.save();
     res.status(200).json({ success: true, message: 'تم تحديث الشكوى بنجاح', data: complaint });
+
+    // إشعار الزبون عند تغيّر حالة شكواه (قيد المراجعة / محلولة / مرفوضة)
+    if (status && status !== previousStatus && STATUS_NOTIFICATIONS[status]) {
+      User.findById(complaint.customer)
+        .then((customer) => sendPushToUser(customer, {
+          ...STATUS_NOTIFICATIONS[status],
+          data: { type: 'complaint_update', complaintId: complaint._id.toString(), status },
+        }))
+        .catch(() => {});
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
