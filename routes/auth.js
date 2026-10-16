@@ -6,6 +6,7 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const PromoCode = require('../models/PromoCode');
 const { getDefaultRegionId } = require('../utils/regionHelper');
+const { signToken } = require('../middleware/auth');
 
 // يتحقق من كلمة المرور بما يتوافق مع الحسابات القديمة غير المشفّرة (قبل
 // إضافة bcrypt) — لو كانت مشفّرة يقارنها بالطريقة الآمنة، ولو نص صريح
@@ -96,6 +97,7 @@ router.post('/customer/register', async (req, res) => {
       success: true,
       message: 'تم إنشاء الحساب بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -129,6 +131,7 @@ router.post('/customer/login', async (req, res) => {
       success: true,
       message: 'تم تسجيل الدخول بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -229,6 +232,7 @@ router.post('/login', async (req, res) => {
       success: true,
       message: 'تم تسجيل الدخول بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -536,6 +540,7 @@ router.post('/google', async (req, res) => {
         success: true,
         message: 'تم تسجيل الدخول عبر Google بنجاح',
         data: user,
+        token: signToken(user),
       });
     }
 
@@ -554,6 +559,7 @@ router.post('/google', async (req, res) => {
       success: true,
       message: 'تم إنشاء حساب زبون جديد عبر Google بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -581,6 +587,7 @@ router.post('/apple', async (req, res) => {
         success: true,
         message: 'تم تسجيل الدخول عبر Apple ID بنجاح',
         data: user,
+        token: signToken(user),
       });
     }
 
@@ -599,6 +606,7 @@ router.post('/apple', async (req, res) => {
       success: true,
       message: 'تم إنشاء حساب زبون جديد عبر Apple ID بنجاح',
       data: user,
+      token: signToken(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
